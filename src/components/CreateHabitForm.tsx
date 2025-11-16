@@ -163,9 +163,9 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
 
         {/* Suggestions Dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 w-full mt-2 backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200/50 shadow-xl overflow-hidden">
+          <div className="absolute z-10 w-full mt-2 backdrop-blur-xl bg-white/90 dark:bg-gray-800/90 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl overflow-hidden">
             <div className="py-2">
-              <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                 Suggested Habits
               </div>
               {suggestions.map((suggestion, index) => (
