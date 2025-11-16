@@ -77,31 +77,34 @@ export function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-blue-50 via-white to-blue-100">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="w-full max-w-md">
         {/* Glassmorphism Card */}
-        <div className="backdrop-blur-xl bg-white/40 rounded-3xl shadow-2xl border border-white/20 p-8">
+        <div className="backdrop-blur-2xl bg-white/50 dark:bg-gray-800/50 rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 md:p-10">
           {/* Icon */}
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 rounded-2xl bg-white/60 backdrop-blur-sm flex items-center justify-center shadow-lg">
-              <svg className="w-8 h-8 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+          <div className="flex justify-center mb-8">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-blue-500/30">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
               </svg>
             </div>
           </div>
 
           {/* Title */}
-          <h2 className="text-center text-2xl font-bold text-gray-900 mb-2">
-            Create your account
+          <h2 className="text-center text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-2">
+            Create Account
           </h2>
-          <p className="text-center text-sm text-gray-600 mb-6">
-            Start building better habits today. For free
+          <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-8">
+            Start building better habits today
           </p>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50/80 backdrop-blur-sm border border-red-200">
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="mb-6 p-4 rounded-2xl bg-red-50/80 dark:bg-red-900/20 backdrop-blur-sm border border-red-200 dark:border-red-800/50 flex items-center space-x-2">
+              <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
             </div>
           )}
 
@@ -120,7 +123,7 @@ export function SignupPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-3 bg-gray-50/50 backdrop-blur-sm border-0 rounded-xl focus:ring-2 focus:ring-gray-300 focus:bg-white/60 transition-all placeholder-gray-400"
+                className="w-full pl-10 pr-4 py-4 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border-0 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all placeholder-gray-400 dark:placeholder-gray-500 shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
               />
             </div>
 
@@ -133,11 +136,11 @@ export function SignupPage() {
               </div>
               <input
                 type="email"
-                placeholder="Email"
+                placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-3 bg-gray-50/50 backdrop-blur-sm border-0 rounded-xl focus:ring-2 focus:ring-gray-300 focus:bg-white/60 transition-all placeholder-gray-400"
+                className="w-full pl-10 pr-4 py-4 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border-0 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all placeholder-gray-400 dark:placeholder-gray-500 shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
               />
             </div>
 
@@ -154,7 +157,7 @@ export function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full pl-10 pr-12 py-3 bg-gray-50/50 backdrop-blur-sm border-0 rounded-xl focus:ring-2 focus:ring-gray-300 focus:bg-white/60 transition-all placeholder-gray-400"
+                className="w-full pl-10 pr-12 py-4 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border-0 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all placeholder-gray-400 dark:placeholder-gray-500 shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
               />
               <button
                 type="button"
@@ -184,7 +187,7 @@ export function SignupPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="w-full pl-10 pr-12 py-3 bg-gray-50/50 backdrop-blur-sm border-0 rounded-xl focus:ring-2 focus:ring-gray-300 focus:bg-white/60 transition-all placeholder-gray-400"
+                className="w-full pl-10 pr-12 py-4 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border-0 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all placeholder-gray-400 dark:placeholder-gray-500 shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
               />
               <button
                 type="button"
@@ -205,18 +208,28 @@ export function SignupPage() {
             <button
               type="submit"
               disabled={signup.isPending}
-              className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              className="w-full py-4 px-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-2"
             >
-              {signup.isPending ? 'Creating account...' : 'Get Started'}
+              {signup.isPending ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Creating account...</span>
+                </>
+              ) : (
+                <span>Create Account</span>
+              )}
             </button>
 
             {/* Divider */}
-            <div className="relative my-6">
+            <div className="relative my-8">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300/50"></div>
+                <div className="w-full border-t border-gray-300/50 dark:border-gray-600/50"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white/40 backdrop-blur-sm text-gray-500">Or sign up with</span>
+                <span className="px-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-500 dark:text-gray-400 font-medium">Or continue with</span>
               </div>
             </div>
 
@@ -225,7 +238,7 @@ export function SignupPage() {
               type="button"
               onClick={handleGoogleSignup}
               disabled={loginWithGoogle.isPending}
-              className="w-full flex items-center justify-center gap-3 p-3 bg-white/60 backdrop-blur-sm hover:bg-white/80 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="w-full flex items-center justify-center gap-3 p-4 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:scale-[1.02] active:scale-[0.98]"
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -233,14 +246,14 @@ export function SignupPage() {
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
-              <span className="font-medium text-gray-700">Continue with Google</span>
+              <span className="font-semibold text-gray-700 dark:text-gray-200">Continue with Google</span>
             </button>
           </form>
 
           {/* Sign In Link */}
-          <p className="mt-6 text-center text-sm text-gray-600">
+          <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-gray-900 hover:underline">
+            <Link to="/login" className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
               Sign in
             </Link>
           </p>
