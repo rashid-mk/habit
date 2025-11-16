@@ -28,8 +28,13 @@ export function TimelineGraph({ checks, startDate }: TimelineGraphProps) {
   const habitStartDate = dayjs(startDate)
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">30-Day Timeline</h3>
+    <div className="backdrop-blur-xl bg-white/50 dark:bg-gray-800/50 rounded-3xl border border-white/20 dark:border-gray-700/20 p-6 shadow-xl">
+      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+        <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        30-Day Timeline
+      </h3>
       
       <div className="grid grid-cols-10 gap-2">
         {dateRange.map((date) => {
@@ -42,14 +47,14 @@ export function TimelineGraph({ checks, startDate }: TimelineGraphProps) {
             <div
               key={date}
               className={`
-                aspect-square rounded flex items-center justify-center text-xs
+                aspect-square rounded-lg flex items-center justify-center text-xs font-semibold transition-all duration-200 hover:scale-110
                 ${isBeforeStart 
-                  ? 'bg-gray-100 text-gray-400' 
+                  ? 'bg-gray-200/50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500' 
                   : isCompleted 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-red-100 text-red-600'
+                    ? 'bg-gradient-to-br from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 text-white shadow-lg' 
+                    : 'bg-red-100/50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                 }
-                ${isToday ? 'ring-2 ring-blue-500' : ''}
+                ${isToday ? 'ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-2 dark:ring-offset-gray-800' : ''}
               `}
               title={`${dateObj.format('MMM D')}: ${
                 isBeforeStart 
@@ -65,18 +70,18 @@ export function TimelineGraph({ checks, startDate }: TimelineGraphProps) {
         })}
       </div>
 
-      <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+      <div className="mt-6 flex items-center justify-center gap-6 text-sm">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 rounded"></div>
-          <span className="text-gray-600">Completed</span>
+          <div className="w-4 h-4 bg-gradient-to-br from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 rounded shadow-sm"></div>
+          <span className="text-gray-600 dark:text-gray-400 font-medium">Completed</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-100 rounded"></div>
-          <span className="text-gray-600">Missed</span>
+          <div className="w-4 h-4 bg-red-100/50 dark:bg-red-900/30 rounded"></div>
+          <span className="text-gray-600 dark:text-gray-400 font-medium">Missed</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-gray-100 rounded"></div>
-          <span className="text-gray-600">Before start</span>
+          <div className="w-4 h-4 bg-gray-200/50 dark:bg-gray-700/50 rounded"></div>
+          <span className="text-gray-600 dark:text-gray-400 font-medium">Before start</span>
         </div>
       </div>
     </div>

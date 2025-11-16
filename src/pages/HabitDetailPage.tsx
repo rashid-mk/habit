@@ -1,7 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useHabit, useHabitAnalytics, useHabitChecks, useDeleteHabit } from '../hooks/useHabits'
-import { StreakDisplay } from '../components/StreakDisplay'
-import { CompletionRateCard } from '../components/CompletionRateCard'
 import { TimelineGraph } from '../components/TimelineGraph'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Navigation } from '../components/Navigation'
@@ -218,20 +216,7 @@ export function HabitDetailPage() {
           </div>
         )}
 
-        {/* Streaks Section */}
-        {!analyticsLoading && analytics && (
-          <div className="grid gap-6 md:grid-cols-2">
-            <StreakDisplay
-              currentStreak={analytics.currentStreak}
-              longestStreak={analytics.longestStreak}
-            />
-            <CompletionRateCard
-              completionRate={analytics.completionRate}
-              totalDays={analytics.totalDays}
-              completedDays={analytics.completedDays}
-            />
-          </div>
-        )}
+
 
         {/* History Chart */}
         {!checksLoading && checks && checks.length > 0 && (
