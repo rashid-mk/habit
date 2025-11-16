@@ -8,6 +8,7 @@ import dayjs from 'dayjs'
 export interface Habit {
   id: string
   habitName: string
+  habitType?: 'build' | 'break'
   frequency: 'daily' | string[]
   duration: number
   reminderTime?: string

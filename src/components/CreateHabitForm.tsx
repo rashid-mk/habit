@@ -11,6 +11,7 @@ interface CreateHabitFormProps {
 
 export interface HabitFormData {
   habitName: string
+  habitType: 'build' | 'break'
   frequency: 'daily' | string[]
   duration: number
   reminderTime?: string
@@ -28,6 +29,7 @@ const WEEKDAYS = [
 
 export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: CreateHabitFormProps) {
   const [habitName, setHabitName] = useState('')
+  const [habitType, setHabitType] = useState<'build' | 'break'>('build')
   const [frequencyType, setFrequencyType] = useState<'daily' | 'specific'>('daily')
   const [selectedDays, setSelectedDays] = useState<string[]>([])
   const [duration, setDuration] = useState(30)
@@ -84,6 +86,7 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
     const frequency = frequencyType === 'daily' ? 'daily' : selectedDays
     const habitData: HabitFormData = {
       habitName: habitName.trim(),
+      habitType,
       frequency,
       duration,
       reminderTime: reminderTime || undefined,
@@ -178,9 +181,59 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
         )}
       </div>
 
+      {/* Habit Type */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Habit Type *
+        </label>
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setHabitType('build')}
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+              habitType === 'build'
+                ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-700'
+            }`}
+            disabled={isLoading}
+          >
+            <svg className={`w-8 h-8 mb-2 ${habitType === 'build' ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span className={`text-sm font-medium ${habitType === 'build' ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'}`}>
+              Build a Habit
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+              Track positive habits
+            </span>
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setHabitType('break')}
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+              habitType === 'break'
+                ? 'border-red-500 bg-red-50/50 dark:bg-red-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-700'
+            }`}
+            disabled={isLoading}
+          >
+            <svg className={`w-8 h-8 mb-2 ${habitType === 'break' ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            <span className={`text-sm font-medium ${habitType === 'break' ? 'text-red-700 dark:text-red-300' : 'text-gray-600 dark:text-gray-400'}`}>
+              Break a Habit
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+              Track habits to quit
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Frequency Type */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Frequency *
         </label>
         <div className="space-y-2">
