@@ -11,8 +11,12 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
   const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
   const checkInMutation = useCheckIn()
   const [actionTaken, setActionTaken] = useState<'done' | 'skip' | null>(null)
+  // Default to 'build' if habitType is not set (for backward compatibility)
   const isBreakHabit = habit.habitType === 'break'
   const today = dayjs().format('YYYY-MM-DD')
+  
+  // Debug log
+  console.log('Habit:', habit.habitName, 'Type:', habit.habitType, 'isBreakHabit:', isBreakHabit)
 
   const handleAction = async (e: React.MouseEvent, action: 'done' | 'skip') => {
     e.stopPropagation() // Prevent card click
