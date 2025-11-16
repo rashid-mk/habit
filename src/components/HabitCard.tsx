@@ -10,14 +10,14 @@ interface HabitCardProps {
 export function HabitCard({ habit, onClick }: HabitCardProps) {
   const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
   const checkInMutation = useCheckIn()
-  const [actionTaken, setActionTaken] = useState<'done' | 'skip' | null>(null)
+  const [actionTaken, setActionTaken] = useState<'done' | 'skip' | 'failed' | null>(null)
   const [showConfetti, setShowConfetti] = useState(false)
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; color: string; delay: number }>>([])
   // Default to 'build' if habitType is not set (for backward compatibility)
   const isBreakHabit = habit.habitType === 'break'
   const today = dayjs().format('YYYY-MM-DD')
 
-  const handleAction = async (e: React.MouseEvent, action: 'done' | 'skip') => {
+  const handleAction = async (e: React.MouseEvent, action: 'done' | 'skip' | 'failed') => {
     e.stopPropagation() // Prevent card click
     
     if (action === 'done') {
@@ -226,11 +226,11 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
       {/* Quick Actions */}
       {!actionTaken && (
         <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 relative z-10">
-          <div className="flex items-center gap-2 relative">
+          <div className="grid grid-cols-2 gap-2 relative">
             <button
               onClick={(e) => handleAction(e, 'done')}
               disabled={checkInMutation.isPending}
-              className={`relative flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg overflow-visible ${
+              className={`relative col-span-2 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg overflow-visible ${
                 isBreakHabit
                   ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white shadow-red-500/30 hover:shadow-red-500/50'
                   : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-green-500/30 hover:shadow-green-500/50'
@@ -267,14 +267,30 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 )}
               </svg>
-              <span>{isBreakHabit ? 'Resisted Today' : 'Mark Done'}</span>
+              <span>{isBreakHabit ? 'Resisted Today' : 'Done'}</span>
             </button>
+            
+            <button
+              onClick={(e) => handleAction(e, 'failed')}
+              disabled={checkInMutation.isPending}
+              className={`py-2.5 px-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 hover:scale-105 active:scale-95 ${
+                isBreakHabit
+                  ? 'bg-orange-100/80 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700'
+                  : 'bg-red-100/80 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span>{isBreakHabit ? 'Failed' : 'Not Done'}</span>
+            </button>
+            
             <button
               onClick={(e) => handleAction(e, 'skip')}
               disabled={checkInMutation.isPending}
-              className="flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm bg-gray-200/80 dark:bg-gray-700/80 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 hover:scale-105 active:scale-95"
+              className="py-2.5 px-3 rounded-xl font-semibold text-sm bg-gray-200/80 dark:bg-gray-700/80 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 hover:scale-105 active:scale-95"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
               </svg>
               <span>Skip</span>
@@ -291,12 +307,20 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
               ? isBreakHabit
                 ? 'bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/40 dark:to-orange-900/40 text-red-700 dark:text-red-200 border-2 border-red-300 dark:border-red-700'
                 : 'bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 text-green-700 dark:text-green-200 border-2 border-green-300 dark:border-green-700'
+              : actionTaken === 'failed'
+              ? isBreakHabit
+                ? 'bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900/40 dark:to-red-900/40 text-orange-700 dark:text-orange-200 border-2 border-orange-300 dark:border-orange-700'
+                : 'bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/40 dark:to-orange-900/40 text-red-700 dark:text-red-200 border-2 border-red-300 dark:border-red-700'
               : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-gray-300 dark:border-gray-600'
           }`}>
             {actionTaken === 'done' 
               ? isBreakHabit 
                 ? '🛡️ Successfully resisted today!' 
                 : '✓ Completed today!'
+              : actionTaken === 'failed'
+              ? isBreakHabit
+                ? '❌ Failed today - Keep trying!'
+                : '❌ Not done today'
               : '→ Skipped for today'}
           </div>
         </div>
