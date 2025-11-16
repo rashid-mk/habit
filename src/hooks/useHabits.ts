@@ -304,3 +304,37 @@ export function useCheckIn() {
     retryDelay: 1000, // Wait 1 second between retries
   })
 }
+
+
+export function useDeleteHabit() {
+  const { user } = useAuthState()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (habitId: string) => {
+      if (!user) {
+        throw new Error('User must be authenticated to delete a habit')
+      }
+
+      try {
+        // Mark habit as inactive
+        const habitRef = doc(db, 'users', user.uid, 'habits', habitId)
+        await setDoc(habitRef, { isActive: false }, { merge: true })
+        
+        return { success: true }
+      } catch (error: any) {
+        if (error.code === 'permission-denied') {
+          throw new Error('You do not have permission to delete this habit')
+        } else if (error.code === 'unavailable') {
+          throw new Error('Connection lost. Please check your internet connection')
+        } else {
+          throw new Error('Failed to delete habit. Please try again')
+        }
+      }
+    },
+    onSuccess: () => {
+      // Invalidate habits query to refetch the list
+      queryClient.invalidateQueries({ queryKey: ['habits', user?.uid] })
+    },
+  })
+}
