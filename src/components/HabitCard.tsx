@@ -11,17 +11,37 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
   const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
   const checkInMutation = useCheckIn()
   const [actionTaken, setActionTaken] = useState<'done' | 'skip' | null>(null)
+  const [showConfetti, setShowConfetti] = useState(false)
+  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; color: string; delay: number }>>([])
   // Default to 'build' if habitType is not set (for backward compatibility)
   const isBreakHabit = habit.habitType === 'break'
   const today = dayjs().format('YYYY-MM-DD')
-  
-  // Debug log
-  console.log('Habit:', habit.habitName, 'Type:', habit.habitType, 'isBreakHabit:', isBreakHabit)
 
   const handleAction = async (e: React.MouseEvent, action: 'done' | 'skip') => {
     e.stopPropagation() // Prevent card click
     
     if (action === 'done') {
+      // Trigger confetti animation
+      setShowConfetti(true)
+      
+      // Generate particles
+      const newParticles = Array.from({ length: 12 }, (_, i) => ({
+        id: i,
+        x: (Math.random() - 0.5) * 200,
+        y: -Math.random() * 150 - 50,
+        color: isBreakHabit 
+          ? ['#ef4444', '#f97316', '#fb923c'][Math.floor(Math.random() * 3)]
+          : ['#3b82f6', '#8b5cf6', '#10b981'][Math.floor(Math.random() * 3)],
+        delay: Math.random() * 0.1,
+      }))
+      setParticles(newParticles)
+      
+      // Clear confetti after animation
+      setTimeout(() => {
+        setShowConfetti(false)
+        setParticles([])
+      }, 1000)
+      
       await checkInMutation.mutateAsync({ habitId: habit.id, date: today })
     }
     setActionTaken(action)
@@ -36,20 +56,36 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
   }
 
   return (
-    <div
-      onClick={onClick}
-      className={`group backdrop-blur-xl rounded-2xl border-2 p-6 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 relative overflow-hidden ${
-        isBreakHabit
-          ? 'bg-gradient-to-br from-red-50/60 to-orange-50/60 dark:from-red-900/20 dark:to-orange-900/20 border-red-300/40 dark:border-red-700/40 hover:border-red-400/60 dark:hover:border-red-600/60 hover:shadow-red-200/50 dark:hover:shadow-red-900/50'
-          : 'bg-gradient-to-br from-white/60 to-blue-50/40 dark:from-gray-800/60 dark:to-blue-900/20 border-blue-200/30 dark:border-gray-700/30 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-blue-200/50 dark:hover:shadow-blue-900/50'
-      }`}
-    >
-      {/* Decorative Corner Badge */}
-      <div className={`absolute top-0 right-0 w-20 h-20 transform translate-x-8 -translate-y-8 rotate-45 ${
-        isBreakHabit
-          ? 'bg-gradient-to-br from-red-500/10 to-orange-500/10'
-          : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10'
-      }`}></div>
+    <>
+      <style>{`
+        @keyframes confetti-pop {
+          0% {
+            opacity: 1;
+            transform: translate(0, 0) scale(0) rotate(0deg);
+          }
+          50% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+            transform: translate(var(--tx), var(--ty)) scale(1) rotate(360deg);
+          }
+        }
+      `}</style>
+      <div
+        onClick={onClick}
+        className={`group backdrop-blur-xl rounded-2xl border-2 p-6 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 relative overflow-hidden ${
+          isBreakHabit
+            ? 'bg-gradient-to-br from-red-50/60 to-orange-50/60 dark:from-red-900/20 dark:to-orange-900/20 border-red-300/40 dark:border-red-700/40 hover:border-red-400/60 dark:hover:border-red-600/60 hover:shadow-red-200/50 dark:hover:shadow-red-900/50'
+            : 'bg-gradient-to-br from-white/60 to-blue-50/40 dark:from-gray-800/60 dark:to-blue-900/20 border-blue-200/30 dark:border-gray-700/30 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-blue-200/50 dark:hover:shadow-blue-900/50'
+        }`}
+      >
+        {/* Decorative Corner Badge */}
+        <div className={`absolute top-0 right-0 w-20 h-20 transform translate-x-8 -translate-y-8 rotate-45 ${
+          isBreakHabit
+            ? 'bg-gradient-to-br from-red-500/10 to-orange-500/10'
+            : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10'
+        }`}></div>
       {/* Header */}
       <div className="flex items-start justify-between mb-4 relative z-10">
         <div className="flex-1">
@@ -190,16 +226,40 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
       {/* Quick Actions */}
       {!actionTaken && (
         <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 relative z-10">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 relative">
             <button
               onClick={(e) => handleAction(e, 'done')}
               disabled={checkInMutation.isPending}
-              className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg ${
+              className={`relative flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg overflow-visible ${
                 isBreakHabit
                   ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white shadow-red-500/30 hover:shadow-red-500/50'
                   : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-green-500/30 hover:shadow-green-500/50'
               } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 hover:scale-105 active:scale-95`}
             >
+              {/* Confetti Particles */}
+              {showConfetti && particles.map((particle) => (
+                <div
+                  key={particle.id}
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: '50%',
+                    top: '50%',
+                    animation: `confetti-pop 0.8s ease-out forwards`,
+                    animationDelay: `${particle.delay}s`,
+                    // @ts-ignore
+                    '--tx': `${particle.x}px`,
+                    '--ty': `${particle.y}px`,
+                  }}
+                >
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{
+                      backgroundColor: particle.color,
+                      boxShadow: `0 0 15px ${particle.color}`,
+                    }}
+                  />
+                </div>
+              ))}
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {isBreakHabit ? (
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -252,6 +312,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
           </svg>
         </span>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
