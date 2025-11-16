@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "your-project-id",
+    "a": "cashbook-e9659",
+    "hbt": "habits-15973"
+  },
+  "targets": {},
+  "etags": {}
+}

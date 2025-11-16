@@ -1,0 +1,104 @@
+import { useHabitAnalytics, Habit } from '../hooks/useHabits'
+
+interface HabitCardProps {
+  habit: Habit
+  onClick: () => void
+}
+
+export function HabitCard({ habit, onClick }: HabitCardProps) {
+  const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
+
+  const getFrequencyDisplay = () => {
+    if (habit.frequency === 'daily') return 'Daily'
+    if (Array.isArray(habit.frequency)) {
+      return habit.frequency.map(d => d.charAt(0).toUpperCase()).join(', ')
+    }
+    return habit.frequency
+  }
+
+  return (
+    <div
+      onClick={onClick}
+      className="group backdrop-blur-xl bg-white/40 rounded-2xl border border-white/20 p-6 cursor-pointer hover:bg-white/60 hover:shadow-xl hover:scale-105 transition-all duration-300"
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
+            {habit.habitName}
+          </h3>
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>{getFrequencyDisplay()}</span>
+          </div>
+        </div>
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Stats */}
+      {isLoading && (
+        <div className="animate-pulse space-y-3">
+          <div className="h-3 bg-gray-200/50 rounded w-3/4"></div>
+          <div className="h-3 bg-gray-200/50 rounded w-1/2"></div>
+        </div>
+      )}
+
+      {!isLoading && analytics && (
+        <div className="space-y-3">
+          {/* Streak */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                </svg>
+              </div>
+              <span className="text-sm text-gray-600">Streak</span>
+            </div>
+            <span className="text-lg font-bold text-gray-900">{analytics.currentStreak} days</span>
+          </div>
+
+          {/* Completion Rate */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <span className="text-sm text-gray-600">Completion</span>
+            </div>
+            <span className="text-lg font-bold text-gray-900">{analytics.completionRate.toFixed(0)}%</span>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="pt-2">
+            <div className="w-full h-2 bg-gray-200/50 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-500"
+                style={{ width: `${analytics.completionRate}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="mt-4 pt-4 border-t border-gray-200/50 flex items-center justify-between text-xs text-gray-500">
+        <span>{habit.duration} days goal</span>
+        <span className="flex items-center space-x-1">
+          <span>View details</span>
+          <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </div>
+  )
+}

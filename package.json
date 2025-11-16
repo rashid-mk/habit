@@ -1,0 +1,45 @@
+{
+  "name": "habit-tracker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --skipLibCheck && vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit --skipLibCheck",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "emulators": "firebase emulators:start",
+    "predeploy": "npm run build",
+    "deploy": "npm run build && firebase deploy --only \"hosting,firestore\"",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "deploy:all": "npm run predeploy && npm run deploy",
+    "deploy:check": "firebase deploy --dry-run --only \"hosting,firestore\""
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.22",
+    "jsdom": "^27.2.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "terser": "^5.44.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.9"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.9",
+    "dayjs": "^1.11.19",
+    "firebase": "^12.6.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.6"
+  }
+}

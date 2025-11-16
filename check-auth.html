@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Firebase Auth Test</title>
+</head>
+<body>
+  <h1>Firebase Authentication Test</h1>
+  <div id="status">Checking...</div>
+  
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCl6kJS0Yi3VSCZU61yAu9OrGu8iQ4lA5c",
+      authDomain: "habits-15973.firebaseapp.com",
+      projectId: "habits-15973",
+      storageBucket: "habits-15973.firebasestorage.app",
+      messagingSenderId: "15438457220",
+      appId: "1:15438457220:web:f24bbecc4982eab4a8d5d1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    const statusDiv = document.getElementById('status');
+    
+    // Test authentication
+    const testEmail = 'test@example.com';
+    const testPassword = 'testpassword123';
+    
+    createUserWithEmailAndPassword(auth, testEmail, testPassword)
+      .then((userCredential) => {
+        statusDiv.innerHTML = '<p style="color: green;">✓ Authentication is working! User created: ' + userCredential.user.email + '</p>';
+      })
+      .catch((error) => {
+        if (error.code === 'auth/email-already-in-use') {
+          statusDiv.innerHTML = '<p style="color: green;">✓ Authentication is working! (Email already exists)</p>';
+        } else {
+          statusDiv.innerHTML = '<p style="color: red;">✗ Error: ' + error.code + '<br>' + error.message + '</p>';
+          
+          if (error.code === 'auth/operation-not-allowed') {
+            statusDiv.innerHTML += '<p><strong>Fix:</strong> Enable Email/Password authentication in Firebase Console:<br><a href="https://console.firebase.google.com/project/habits-15973/authentication/providers" target="_blank">Click here to enable</a></p>';
+          }
+        }
+      });
+  </script>
+</body>
+</html>
