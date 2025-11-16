@@ -66,6 +66,33 @@ export const HABIT_SUGGESTIONS = [
   'Track expenses',
   'No social media',
   'Limit screen time',
+  
+  // Bad Habits to Break
+  'Stop smoking',
+  'Quit vaping',
+  'Stop nail biting',
+  'Quit procrastinating',
+  'Stop snacking late',
+  'Quit drinking soda',
+  'Stop checking phone',
+  'Quit oversleeping',
+  'Stop negative self-talk',
+  'Quit impulse buying',
+  'Stop skipping meals',
+  'Quit energy drinks',
+  'Stop staying up late',
+  'Quit fast food',
+  'Stop interrupting others',
+  'Quit complaining',
+  'Stop comparing myself',
+  'Quit multitasking',
+  'Stop eating junk food',
+  'Quit binge watching',
+  'Stop drinking alcohol',
+  'Quit caffeine',
+  'Stop gossiping',
+  'Quit making excuses',
+  'Stop being late',
 ]
 
 export function getHabitSuggestions(input: string): string[] {
