@@ -1,4 +1,6 @@
-import { useHabitAnalytics, Habit } from '../hooks/useHabits'
+import { useState } from 'react'
+import { useHabitAnalytics, Habit, useCheckIn } from '../hooks/useHabits'
+import dayjs from 'dayjs'
 
 interface HabitCardProps {
   habit: Habit
@@ -7,7 +9,19 @@ interface HabitCardProps {
 
 export function HabitCard({ habit, onClick }: HabitCardProps) {
   const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
+  const checkInMutation = useCheckIn()
+  const [actionTaken, setActionTaken] = useState<'done' | 'skip' | null>(null)
   const isBreakHabit = habit.habitType === 'break'
+  const today = dayjs().format('YYYY-MM-DD')
+
+  const handleAction = async (e: React.MouseEvent, action: 'done' | 'skip') => {
+    e.stopPropagation() // Prevent card click
+    
+    if (action === 'done') {
+      await checkInMutation.mutateAsync({ habitId: habit.id, date: today })
+    }
+    setActionTaken(action)
+  }
 
   const getFrequencyDisplay = () => {
     if (habit.frequency === 'daily') return 'Daily'
@@ -113,8 +127,57 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
         </div>
       )}
 
+      {/* Quick Actions */}
+      {!actionTaken && (
+        <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => handleAction(e, 'done')}
+              disabled={checkInMutation.isPending}
+              className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+                isBreakHabit
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{isBreakHabit ? 'Avoided' : 'Done'}</span>
+            </button>
+            <button
+              onClick={(e) => handleAction(e, 'skip')}
+              disabled={checkInMutation.isPending}
+              className="flex-1 py-2 px-3 rounded-lg font-medium text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+              <span>Skip</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action Taken Feedback */}
+      {actionTaken && (
+        <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
+          <div className={`py-2 px-3 rounded-lg text-center text-sm font-medium ${
+            actionTaken === 'done'
+              ? isBreakHabit
+                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+          }`}>
+            {actionTaken === 'done' 
+              ? isBreakHabit ? '✓ Avoided today!' : '✓ Completed today!'
+              : '→ Skipped for today'}
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
-      <div className="mt-4 pt-4 border-t border-gray-200/50 flex items-center justify-between text-xs text-gray-500">
+      <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <span>{habit.duration} days goal</span>
         <span className="flex items-center space-x-1">
           <span>View details</span>
