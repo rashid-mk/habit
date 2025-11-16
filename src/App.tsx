@@ -15,6 +15,7 @@ const CreateHabitPage = lazy(() => import('./pages/CreateHabitPage').then(m => (
 const HabitDetailPage = lazy(() => import('./pages/HabitDetailPage').then(m => ({ default: m.HabitDetailPage })))
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage').then(m => ({ default: m.ChangePasswordPage })))
 const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })))
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -92,6 +93,14 @@ function App() {
                   element={
                     <AuthGuard>
                       <AboutPage />
+                    </AuthGuard>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <AuthGuard>
+                      <ProfilePage />
                     </AuthGuard>
                   }
                 />
