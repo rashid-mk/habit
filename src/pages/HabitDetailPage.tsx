@@ -1,8 +1,7 @@
-import { useParams } from 'react-router-dom'
-import { useHabit, useHabitAnalytics, useCheckIn, useHabitChecks } from '../hooks/useHabits'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useHabit, useHabitAnalytics, useHabitChecks, useDeleteHabit } from '../hooks/useHabits'
 import { StreakDisplay } from '../components/StreakDisplay'
 import { CompletionRateCard } from '../components/CompletionRateCard'
-import { CheckInButton } from '../components/CheckInButton'
 import { TimelineGraph } from '../components/TimelineGraph'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Navigation } from '../components/Navigation'
@@ -12,20 +11,24 @@ import { usePerformanceTrace } from '../hooks/usePerformanceTrace'
 
 export function HabitDetailPage() {
   const { habitId } = useParams<{ habitId: string }>()
+  const navigate = useNavigate()
   const { data: habit, isLoading: habitLoading, error: habitError, refetch: refetchHabit } = useHabit(habitId || '')
   const { data: analytics, isLoading: analyticsLoading } = useHabitAnalytics(habitId || '')
   const { data: checks, isLoading: checksLoading } = useHabitChecks(habitId || '')
-  const checkInMutation = useCheckIn()
-  const [isCheckedInToday, setIsCheckedInToday] = useState(false)
+  const deleteHabitMutation = useDeleteHabit()
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Track habit detail page load performance
   usePerformanceTrace('habit_detail_page_load')
 
-  const today = dayjs().format('YYYY-MM-DD')
-
-  const handleCheckIn = async (habitId: string, date: string) => {
-    await checkInMutation.mutateAsync({ habitId, date })
-    setIsCheckedInToday(true)
+  const handleDelete = async () => {
+    if (!habitId) return
+    try {
+      await deleteHabitMutation.mutateAsync(habitId)
+      navigate('/dashboard')
+    } catch (error) {
+      console.error('Failed to delete habit:', error)
+    }
   }
 
   if (habitLoading) {
@@ -94,16 +97,50 @@ export function HabitDetailPage() {
                 )}
               </div>
             </div>
-            <div className="ml-4">
-              <CheckInButton
-                habitId={habitId || ''}
-                date={today}
-                isCompleted={isCheckedInToday}
-                onCheckIn={handleCheckIn}
-              />
-            </div>
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="backdrop-blur-xl bg-white/90 dark:bg-gray-800/90 rounded-3xl border border-white/20 dark:border-gray-700/20 p-8 shadow-2xl max-w-md w-full">
+              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
+                <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white text-center mb-2">Delete Habit?</h3>
+              <p className="text-gray-600 dark:text-gray-300 text-center mb-6">
+                Are you sure you want to delete "{habit.habitName}"? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleteHabitMutation.isPending}
+                  className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                  {deleteHabitMutation.isPending ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <span>Delete Habit</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Overview Statistics */}
         {!analyticsLoading && analytics && (
@@ -301,6 +338,27 @@ export function HabitDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Delete Habit Section */}
+        <div className="backdrop-blur-xl bg-white/50 dark:bg-gray-800/50 rounded-3xl border border-white/20 dark:border-gray-700/20 p-6 shadow-xl">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Danger Zone</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Once you delete a habit, there is no going back. Please be certain.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-6 py-3 rounded-xl bg-red-500/10 dark:bg-red-900/20 hover:bg-red-500/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold text-sm transition-all flex items-center space-x-2 border-2 border-red-300 dark:border-red-800 hover:border-red-400 dark:hover:border-red-700 hover:scale-105"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>Delete Habit</span>
+            </button>
+          </div>
+        </div>
       </main>
     </div>
   )
