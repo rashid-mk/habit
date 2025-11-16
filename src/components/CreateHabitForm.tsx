@@ -156,7 +156,10 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
             onChange={(e) => setHabitName(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => habitName.length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            onBlur={() => {
+              // Delay to allow click event to fire first
+              setTimeout(() => setShowSuggestions(false), 200)
+            }}
             className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl pl-12 pr-4 py-4 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
             placeholder="e.g., Morning meditation, Exercise, Read for 30 minutes..."
             disabled={isLoading}
@@ -182,8 +185,9 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
                 <button
                   key={suggestion}
                   type="button"
-                  onMouseDown={(e) => {
+                  onClick={(e) => {
                     e.preventDefault()
+                    e.stopPropagation()
                     handleSuggestionClick(suggestion)
                   }}
                   className={`w-full text-left px-4 py-3 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors flex items-center space-x-3 ${
