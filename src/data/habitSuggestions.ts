@@ -95,6 +95,9 @@ export const HABIT_SUGGESTIONS = [
   'Stop being late',
 ]
 
+// Bad habit keywords to detect habit type
+const BAD_HABIT_KEYWORDS = ['stop', 'quit', 'avoid', 'no ', 'limit']
+
 export function getHabitSuggestions(input: string): string[] {
   if (!input || input.length < 2) return []
   
@@ -103,4 +106,9 @@ export function getHabitSuggestions(input: string): string[] {
   return HABIT_SUGGESTIONS
     .filter(habit => habit.toLowerCase().includes(searchTerm))
     .slice(0, 5) // Limit to 5 suggestions
+}
+
+export function isBreakHabit(habitName: string): boolean {
+  const lowerName = habitName.toLowerCase()
+  return BAD_HABIT_KEYWORDS.some(keyword => lowerName.startsWith(keyword))
 }

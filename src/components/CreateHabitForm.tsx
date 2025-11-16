@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, FormEvent, useRef, useEffect } from 'react'
 import { ErrorMessage } from './ErrorMessage'
-import { getHabitSuggestions } from '../data/habitSuggestions'
+import { getHabitSuggestions, isBreakHabit } from '../data/habitSuggestions'
 
 interface CreateHabitFormProps {
   onSubmit: (habitData: HabitFormData) => Promise<void>
@@ -107,6 +107,13 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
     setHabitName(suggestion)
     setShowSuggestions(false)
     setSuggestions([])
+    
+    // Auto-detect habit type based on suggestion
+    if (isBreakHabit(suggestion)) {
+      setHabitType('break')
+    } else {
+      setHabitType('build')
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -144,7 +151,7 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
             onChange={(e) => setHabitName(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => habitName.length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             className="block w-full rounded-xl border-0 bg-gray-50/50 backdrop-blur-sm px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:bg-white/60 transition-all placeholder-gray-400"
             placeholder="e.g., Morning meditation, Exercise..."
             disabled={isLoading}
@@ -165,15 +172,22 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
                 <button
                   key={suggestion}
                   type="button"
-                  onClick={() => handleSuggestionClick(suggestion)}
-                  className={`w-full text-left px-4 py-3 hover:bg-blue-50/50 transition-colors flex items-center space-x-3 ${
-                    index === selectedSuggestionIndex ? 'bg-blue-50/50' : ''
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    handleSuggestionClick(suggestion)
+                  }}
+                  className={`w-full text-left px-4 py-3 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors flex items-center space-x-3 ${
+                    index === selectedSuggestionIndex ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''
                   }`}
                 >
-                  <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  <svg className={`w-5 h-5 flex-shrink-0 ${isBreakHabit(suggestion) ? 'text-red-500 dark:text-red-400' : 'text-blue-500 dark:text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {isBreakHabit(suggestion) ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    )}
                   </svg>
-                  <span className="text-sm text-gray-700">{suggestion}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{suggestion}</span>
                 </button>
               ))}
             </div>
