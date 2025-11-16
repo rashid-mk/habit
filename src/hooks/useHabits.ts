@@ -41,6 +41,7 @@ export function useCreateHabit() {
         const habitsRef = collection(db, 'users', user.uid, 'habits')
         const habitDoc = await addDoc(habitsRef, {
           habitName: habitData.habitName,
+          habitType: habitData.habitType, // Add habitType field
           frequency: habitData.frequency,
           duration: habitData.duration,
           reminderTime: habitData.reminderTime || null,
@@ -96,10 +97,14 @@ export function useHabits() {
 
         const habits: Habit[] = []
         snapshot.forEach((doc) => {
-          habits.push({
-            id: doc.id,
-            ...doc.data(),
-          } as Habit)
+          const habitData = doc.data()
+          // Only include active habits
+          if (habitData.isActive !== false) {
+            habits.push({
+              ...habitData,
+              id: doc.id,
+            } as Habit)
+          }
         })
 
         return habits
