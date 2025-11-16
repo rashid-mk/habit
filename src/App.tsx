@@ -6,6 +6,7 @@ import { NotificationPrompt } from './components/NotificationPrompt'
 import { SyncStatusIndicator } from './components/SyncStatusIndicator'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { ViewSettingsProvider } from './contexts/ViewSettingsContext'
 
 // Lazy load route components for code splitting
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -16,6 +17,7 @@ const HabitDetailPage = lazy(() => import('./pages/HabitDetailPage').then(m => (
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage').then(m => ({ default: m.ChangePasswordPage })))
 const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })))
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })))
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -51,7 +53,8 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <BrowserRouter>
+          <ViewSettingsProvider>
+            <BrowserRouter>
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
@@ -104,12 +107,21 @@ function App() {
                     </AuthGuard>
                   }
                 />
+                <Route
+                  path="/settings"
+                  element={
+                    <AuthGuard>
+                      <SettingsPage />
+                    </AuthGuard>
+                  }
+                />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Suspense>
             <NotificationPrompt />
             <SyncStatusIndicator />
-          </BrowserRouter>
+            </BrowserRouter>
+          </ViewSettingsProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>

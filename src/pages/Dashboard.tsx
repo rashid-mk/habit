@@ -9,12 +9,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { usePerformanceTrace } from '../hooks/usePerformanceTrace'
+import { useViewSettings } from '../contexts/ViewSettingsContext'
 
 export function Dashboard() {
   const { user } = useAuthState()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: habits, isLoading, error, refetch } = useHabits()
+  const { viewType } = useViewSettings()
   
   // Track dashboard page load performance
   const { putMetric } = usePerformanceTrace('dashboard_page_load')
@@ -192,7 +194,7 @@ export function Dashboard() {
         )}
 
         {!isLoading && !error && habits && habits.length > 0 && (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className={viewType === 'grid' ? 'grid gap-6 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col gap-4 max-w-4xl mx-auto'}>
             {habits.map((habit) => (
               <div
                 key={habit.id}
