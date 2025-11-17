@@ -13,7 +13,6 @@ interface SevenDayTimelineProps {
 
 export const SevenDayTimeline = memo(function SevenDayTimeline({
   habitId,
-  habitStartDate,
   habitColor,
   isBreakHabit,
 }: SevenDayTimelineProps) {

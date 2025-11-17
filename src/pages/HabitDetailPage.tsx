@@ -1,6 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useHabit, useHabitAnalytics, useHabitChecks, useDeleteHabit } from '../hooks/useHabits'
-import { TimelineGraph } from '../components/TimelineGraph'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Navigation } from '../components/Navigation'
 import { useState } from 'react'
