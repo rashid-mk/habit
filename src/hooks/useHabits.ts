@@ -256,15 +256,8 @@ export function useCheckIn() {
       const dateKey = dayjs(date).format('YYYY-MM-DD')
 
       try {
-        // Check if check-in already exists
+        // Write or update check document with dateKey as document ID
         const checkRef = doc(db, 'users', user.uid, 'habits', habitId, 'checks', dateKey)
-        const existingCheck = await getDoc(checkRef)
-
-        if (existingCheck.exists()) {
-          throw new Error('Already completed today')
-        }
-
-        // Write check document with dateKey as document ID
         await setDoc(checkRef, {
           dateKey,
           completedAt: serverTimestamp(),
@@ -288,9 +281,7 @@ export function useCheckIn() {
         return { dateKey }
       } catch (error: any) {
         // Handle Firestore errors
-        if (error.message === 'Already completed today') {
-          throw error
-        } else if (error.code === 'permission-denied') {
+        if (error.code === 'permission-denied') {
           throw new Error('You do not have permission to check in')
         } else if (error.code === 'unavailable') {
           throw new Error('Connection lost. Changes will sync when online')
@@ -307,6 +298,71 @@ export function useCheckIn() {
     },
     retry: 2, // Retry failed writes up to 2 times
     retryDelay: 1000, // Wait 1 second between retries
+  })
+}
+
+
+export function useUndoCheckIn() {
+  const { user } = useAuthState()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ habitId, date }: { habitId: string; date: string }) => {
+      if (!user) {
+        throw new Error('User must be authenticated to undo check-in')
+      }
+
+      // Format date as YYYY-MM-DD for document ID
+      const dateKey = dayjs(date).format('YYYY-MM-DD')
+
+      try {
+        // Delete check document
+        const checkRef = doc(db, 'users', user.uid, 'habits', habitId, 'checks', dateKey)
+        const existingCheck = await getDoc(checkRef)
+
+        if (!existingCheck.exists()) {
+          // No check-in to delete, just return success
+          return { dateKey }
+        }
+
+        // Delete the check-in using deleteDoc
+        const { deleteDoc } = await import('firebase/firestore')
+        await deleteDoc(checkRef)
+
+        // Get habit start date for analytics calculation
+        const habitRef = doc(db, 'users', user.uid, 'habits', habitId)
+        const habitDoc = await getDoc(habitRef)
+        
+        if (habitDoc.exists()) {
+          const habitData = habitDoc.data()
+          const { updateHabitAnalytics } = await import('../utils/analyticsCalculator')
+          
+          // Calculate and update analytics (async, don't block UI)
+          updateHabitAnalytics(user.uid, habitId, habitData.startDate).catch((error) => {
+            console.error('Failed to update analytics:', error)
+          })
+        }
+
+        return { dateKey }
+      } catch (error: any) {
+        // Handle Firestore errors
+        if (error.code === 'permission-denied') {
+          throw new Error('You do not have permission to undo check-in')
+        } else if (error.code === 'unavailable') {
+          throw new Error('Connection lost. Changes will sync when online')
+        } else {
+          throw new Error('Failed to undo check-in. Please try again')
+        }
+      }
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate analytics query to refetch updated stats
+      queryClient.invalidateQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
+      // Invalidate checks query
+      queryClient.invalidateQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
+    },
+    retry: 2,
+    retryDelay: 1000,
   })
 }
 

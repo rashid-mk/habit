@@ -40,6 +40,9 @@ export function useNotifications() {
   }, [user]);
 
   const requestPermission = async () => {
+    // Always dismiss the prompt when user interacts
+    setShowPrompt(false);
+    
     if (!messaging || !user) {
       console.warn('Messaging not supported or user not authenticated');
       return false;
@@ -63,14 +66,12 @@ export function useNotifications() {
             fcmToken: currentToken,
           });
 
-          setShowPrompt(false);
           return true;
         } else {
           console.warn('No registration token available');
           return false;
         }
       } else {
-        setShowPrompt(false);
         return false;
       }
     } catch (error) {

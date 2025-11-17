@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useHabitAnalytics, Habit, useCheckIn } from '../hooks/useHabits'
+import { useHabitAnalytics, Habit, useCheckIn, useUndoCheckIn } from '../hooks/useHabits'
 import dayjs from 'dayjs'
 
 interface HabitCardProps {
@@ -10,6 +10,7 @@ interface HabitCardProps {
 export function HabitCard({ habit, onClick }: HabitCardProps) {
   const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
   const checkInMutation = useCheckIn()
+  const undoCheckInMutation = useUndoCheckIn()
   const [actionTaken, setActionTaken] = useState<'done' | 'skip' | 'failed' | null>(null)
   const [showConfetti, setShowConfetti] = useState(false)
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; color: string; delay: number }>>([])
@@ -43,6 +44,9 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
       }, 1000)
       
       await checkInMutation.mutateAsync({ habitId: habit.id, date: today })
+    } else if (action === 'failed') {
+      // Delete check-in if it exists (marking as not done/failed)
+      await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
     }
     setActionTaken(action)
   }
@@ -229,7 +233,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
           <div className="grid grid-cols-2 gap-2 relative">
             <button
               onClick={(e) => handleAction(e, 'done')}
-              disabled={checkInMutation.isPending}
+              disabled={checkInMutation.isPending || undoCheckInMutation.isPending}
               className={`relative col-span-2 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg overflow-visible ${
                 isBreakHabit
                   ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white shadow-red-500/30 hover:shadow-red-500/50'
@@ -272,7 +276,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
             
             <button
               onClick={(e) => handleAction(e, 'failed')}
-              disabled={checkInMutation.isPending}
+              disabled={checkInMutation.isPending || undoCheckInMutation.isPending}
               className={`py-2.5 px-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 hover:scale-105 active:scale-95 ${
                 isBreakHabit
                   ? 'bg-orange-100/80 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700'
@@ -287,7 +291,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
             
             <button
               onClick={(e) => handleAction(e, 'skip')}
-              disabled={checkInMutation.isPending}
+              disabled={checkInMutation.isPending || undoCheckInMutation.isPending}
               className="py-2.5 px-3 rounded-xl font-semibold text-sm bg-gray-200/80 dark:bg-gray-700/80 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 hover:scale-105 active:scale-95"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
