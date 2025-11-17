@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useHabitAnalytics, Habit, useCheckIn, useUndoCheckIn, useHabitChecks, useToggleCheckIn } from '../hooks/useHabits'
 import dayjs from 'dayjs'
 import { SevenDayTimeline } from './SevenDayTimeline'
@@ -9,6 +10,7 @@ interface HabitCardProps {
 }
 
 export function HabitCard({ habit, onClick }: HabitCardProps) {
+  const navigate = useNavigate()
   const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
   const checkInMutation = useCheckIn()
   const undoCheckInMutation = useUndoCheckIn()
@@ -29,9 +31,44 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
   
   // Determine today's status from Firestore
   const todayCheck = todayChecks?.[0]
-  const todayStatus: 'done' | 'not_done' | null = todayCheck 
+  const serverStatus: 'done' | 'not_done' | null = todayCheck 
     ? (todayCheck.status || 'done') 
     : null
+  
+  // Local optimistic state for instant UI updates
+  const [optimisticStatus, setOptimisticStatus] = useState<'done' | 'not_done' | null | undefined>(undefined)
+  const [optimisticAnalytics, setOptimisticAnalytics] = useState<typeof analytics | undefined>(undefined)
+  
+  // Use optimistic status if set (including null for skip), otherwise use server status
+  const todayStatus = optimisticStatus !== undefined ? optimisticStatus : serverStatus
+  
+  // Recalculate analytics locally when optimistic status changes
+  useMemo(() => {
+    if (optimisticStatus !== undefined && analytics) {
+      // Update analytics based on today's optimistic status
+      if (optimisticStatus === 'not_done') {
+        // If marking as not_done today, streak should be 0
+        setOptimisticAnalytics({
+          ...analytics,
+          currentStreak: 0,
+        })
+      } else if (optimisticStatus === 'done') {
+        // If marking as done, increment streak by 1 if it was previously null/skip
+        setOptimisticAnalytics({
+          ...analytics,
+          currentStreak: serverStatus === null ? analytics.currentStreak + 1 : analytics.currentStreak,
+        })
+      } else if (optimisticStatus === null) {
+        // Skip - use server analytics
+        setOptimisticAnalytics(analytics)
+      }
+    } else {
+      setOptimisticAnalytics(undefined)
+    }
+  }, [optimisticStatus, analytics, serverStatus])
+  
+  // Use optimistic analytics if available, otherwise use server analytics
+  const displayAnalytics = optimisticAnalytics || analytics
 
   const handleAction = async (e: React.MouseEvent, action: 'done' | 'not_done' | 'skip') => {
     e.stopPropagation() // Prevent card click
@@ -39,25 +76,36 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
     if (action === 'done') {
       if (todayStatus === 'done') {
         // If already done, unmark it (delete check-in)
+        setOptimisticStatus(null) // Update UI instantly to skip
         await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
+        setOptimisticStatus(undefined) // Reset after server confirms
       } else {
         // Show celebration when marking as done
         setShowCelebration(true)
         setTimeout(() => setShowCelebration(false), 1000)
         
+        // Update UI instantly
+        setOptimisticStatus('done')
+        
         // Mark as done
         await checkInMutation.mutateAsync({ habitId: habit.id, date: today })
+        setOptimisticStatus(undefined) // Reset to use server state
       }
     } else if (action === 'not_done') {
       if (todayStatus === 'not_done') {
         // If already not_done, unmark it (delete check-in)
+        setOptimisticStatus(null) // Update UI instantly to skip
         await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
+        setOptimisticStatus(undefined) // Reset after server confirms
       } else {
         // Show disappointment animation when marking as not done
         if (todayStatus === 'done') {
           setShowDisappointment(true)
           setTimeout(() => setShowDisappointment(false), 1000)
         }
+        
+        // Update UI instantly
+        setOptimisticStatus('not_done')
         
         // Mark as not_done - we need to create a check-in with not_done status
         // First delete any existing check-in
@@ -76,10 +124,22 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
           date: today, 
           currentStatus: 'done' 
         })
+        setOptimisticStatus(undefined) // Reset to use server state
       }
     } else if (action === 'skip') {
+      if (!todayStatus) {
+        // Already skipped, do nothing
+        return
+      }
+      
+      // Update UI instantly to show skip state (null = skip)
+      setOptimisticStatus(null)
+      
       // Delete check-in to mark as skipped
       await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
+      
+      // Reset to use server state
+      setOptimisticStatus(undefined)
     }
   }
 
@@ -91,7 +151,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
   return (
     <div
         className={`group backdrop-blur-xl rounded-2xl border-2 p-4 cursor-pointer hover:shadow-xl transition-all duration-300 relative overflow-hidden w-full flex flex-col ${
-          isExpanded ? '' : 'hover:scale-105'
+          isExpanded ? '' : 'hover:scale-105 h-[160px] justify-between'
         } ${
           isBreakHabit
             ? 'bg-gradient-to-br from-red-50/60 to-orange-50/60 dark:from-red-900/20 dark:to-orange-900/20 border-red-300/40 dark:border-red-700/40 hover:border-red-400/60 dark:hover:border-red-600/60 hover:shadow-red-200/50 dark:hover:shadow-red-900/50'
@@ -105,12 +165,12 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
             : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10'
         }`}></div>
       {/* Compact Header - Always Visible */}
-      <div className="space-y-3 relative z-10">
+      <div className="flex-1 relative z-10 flex flex-col">
         {/* Top Row: Name and Actions */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1" onClick={onClick}>
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h3 className={`text-lg font-bold transition-colors ${
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex-1 min-w-0" onClick={onClick}>
+            <div className="flex items-baseline gap-2 mb-2">
+              <h3 className={`text-lg font-bold transition-colors line-clamp-1 ${
                 isBreakHabit
                   ? 'text-gray-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400'
                   : 'text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400'
@@ -131,32 +191,34 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
               </span>
             </div>
             
-            {/* Today's Status Indicator */}
-            {todayStatus && (
-              <div className={`text-xs font-medium flex items-center gap-1 ${
-                todayStatus === 'done'
-                  ? isBreakHabit
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-green-600 dark:text-green-400'
-                  : 'text-orange-600 dark:text-orange-400'
-              }`}>
-                {todayStatus === 'done' ? (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>{isBreakHabit ? 'Resisted today' : 'Completed today'}</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <span>{isBreakHabit ? 'Failed today' : 'Not done today'}</span>
-                  </>
-                )}
-              </div>
-            )}
+            {/* Today's Status Indicator - Always reserve space */}
+            <div className="min-h-[20px] flex items-center">
+              {todayStatus && (
+                <div className={`text-xs font-medium flex items-center gap-1 ${
+                  todayStatus === 'done'
+                    ? isBreakHabit
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-green-600 dark:text-green-400'
+                    : 'text-orange-600 dark:text-orange-400'
+                }`}>
+                  {todayStatus === 'done' ? (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>{isBreakHabit ? 'Resisted today' : 'Completed today'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span>{isBreakHabit ? 'Failed today' : 'Not done today'}</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Quick Action Buttons */}
@@ -285,25 +347,25 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
           </div>
         </div>
 
-        {/* Polished Expand Button - Only when collapsed */}
-        {!isExpanded && (
-          <button
-            onClick={toggleExpand}
-            className={`mt-4 w-full py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 group/btn ${
-              isBreakHabit
-                ? 'bg-red-100/60 dark:bg-red-900/20 hover:bg-red-200/80 dark:hover:bg-red-900/30 border border-red-200/60 dark:border-red-800/40 text-red-700 dark:text-red-300'
-                : 'bg-blue-100/60 dark:bg-blue-900/20 hover:bg-blue-200/80 dark:hover:bg-blue-900/30 border border-blue-200/60 dark:border-blue-800/40 text-blue-700 dark:text-blue-300'
-            }`}
-            title="Show Details"
-          >
-            <span className="text-sm font-medium">Show Details</span>
-            <svg className="w-4 h-4 transition-transform group-hover/btn:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        )}
-
       </div>
+
+      {/* Polished Expand Button - Only when collapsed */}
+      {!isExpanded && (
+        <button
+          onClick={toggleExpand}
+          className={`w-full py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 group/btn relative z-10 mt-auto ${
+            isBreakHabit
+              ? 'bg-red-100/60 dark:bg-red-900/20 hover:bg-red-200/80 dark:hover:bg-red-900/30 border border-red-200/60 dark:border-red-800/40 text-red-700 dark:text-red-300'
+              : 'bg-blue-100/60 dark:bg-blue-900/20 hover:bg-blue-200/80 dark:hover:bg-blue-900/30 border border-blue-200/60 dark:border-blue-800/40 text-blue-700 dark:text-blue-300'
+          }`}
+          title="Show Details"
+        >
+          <span className="text-sm font-medium">Show Details</span>
+          <svg className="w-4 h-4 transition-transform group-hover/btn:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
 
       {/* Expanded Content */}
       {isExpanded && (
@@ -317,6 +379,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
             habitStartDate={habit.startDate}
             habitColor={habit.color}
             isBreakHabit={isBreakHabit}
+            frequency={habit.frequency}
           />
         </div>
 
@@ -328,7 +391,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
         </div>
       )}
 
-      {!isLoading && analytics && (
+      {!isLoading && displayAnalytics && (
         <div className="space-y-3 relative z-10">
           {/* Streak */}
           <div className="flex items-center justify-between">
@@ -355,7 +418,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
                 ? 'text-red-900 dark:text-red-100'
                 : 'text-gray-900 dark:text-white'
             }`}>
-              {analytics.currentStreak} days
+              {displayAnalytics.currentStreak} days
             </span>
           </div>
 
@@ -392,7 +455,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
                 ? 'text-red-900 dark:text-red-100'
                 : 'text-gray-900 dark:text-white'
             }`}>
-              {analytics.completionRate.toFixed(0)}%
+              {displayAnalytics.completionRate.toFixed(0)}%
             </span>
           </div>
 
@@ -405,7 +468,7 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
                     ? 'bg-gradient-to-r from-red-500 to-orange-500'
                     : 'bg-gradient-to-r from-blue-500 to-purple-500'
                 }`}
-                style={{ width: `${analytics.completionRate}%` }}
+                style={{ width: `${displayAnalytics.completionRate}%` }}
               ></div>
             </div>
           </div>
@@ -415,15 +478,29 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
       {/* Footer */}
       <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <span>{habit.duration} days goal</span>
-        <button 
-          onClick={onClick}
-          className="flex items-center space-x-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
-          <span>View details</span>
-          <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/habits/${habit.id}/edit`)
+            }}
+            className="flex items-center space-x-1 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <span>Edit</span>
+          </button>
+          <button 
+            onClick={onClick}
+            className="flex items-center space-x-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <span>View details</span>
+            <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Collapse Button */}

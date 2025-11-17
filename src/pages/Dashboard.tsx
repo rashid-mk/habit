@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import { useAuthState } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { useHabits } from '../hooks/useHabits'
@@ -10,6 +11,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { usePerformanceTrace } from '../hooks/usePerformanceTrace'
 import { useViewSettings } from '../contexts/ViewSettingsContext'
+import dayjs from 'dayjs'
 
 export function Dashboard() {
   const { user } = useAuthState()
@@ -17,6 +19,8 @@ export function Dashboard() {
   const queryClient = useQueryClient()
   const { data: habits, isLoading, error, refetch } = useHabits()
   const { viewType } = useViewSettings()
+  const [sortBy, setSortBy] = useState<'name' | 'created'>('created')
+  const [showAllHabits, setShowAllHabits] = useState(false)
   
   // Track dashboard page load performance
   const { putMetric } = usePerformanceTrace('dashboard_page_load')
@@ -25,6 +29,41 @@ export function Dashboard() {
   if (!isLoading && habits) {
     putMetric('habits_count', habits.length)
   }
+  
+  // Filter and sort habits based on selected options
+  const filteredAndSortedHabits = useMemo(() => {
+    if (!habits) return []
+    
+    let filtered = [...habits]
+    
+    // Filter by today's day if showAllHabits is false
+    if (!showAllHabits) {
+      const today = dayjs().format('dddd').toLowerCase() // e.g., "monday", "tuesday"
+      filtered = filtered.filter(habit => {
+        // If frequency is 'daily', always show
+        if (habit.frequency === 'daily') return true
+        
+        // If frequency is an array of days, check if today is included
+        if (Array.isArray(habit.frequency)) {
+          return habit.frequency.some(day => day.toLowerCase() === today)
+        }
+        
+        return false
+      })
+    }
+    
+    // Sort the filtered habits
+    if (sortBy === 'name') {
+      return filtered.sort((a, b) => a.habitName.localeCompare(b.habitName))
+    } else {
+      // Sort by creation date (newest first)
+      return filtered.sort((a, b) => {
+        const aTime = a.createdAt?.seconds || 0
+        const bTime = b.createdAt?.seconds || 0
+        return bTime - aTime
+      })
+    }
+  }, [habits, sortBy, showAllHabits])
 
   // Prefetch habit details and analytics when hovering over a habit card
   const prefetchHabitData = async (habitId: string) => {
@@ -67,7 +106,22 @@ export function Dashboard() {
 
   // Calculate stats
   const totalHabits = habits?.length || 0
-  const activeToday = habits?.filter(h => h.isActive).length || 0
+  const activeToday = useMemo(() => {
+    if (!habits) return 0
+    
+    const today = dayjs().format('dddd').toLowerCase()
+    return habits.filter(habit => {
+      // If frequency is 'daily', it's active today
+      if (habit.frequency === 'daily') return true
+      
+      // If frequency is an array of days, check if today is included
+      if (Array.isArray(habit.frequency)) {
+        return habit.frequency.some(day => day.toLowerCase() === today)
+      }
+      
+      return false
+    }).length
+  }, [habits])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -90,7 +144,7 @@ export function Dashboard() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">
         {/* Header Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
@@ -130,18 +184,93 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Habits Section */}
-        <div className="mb-6 flex justify-between items-center">
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Your Habits</h3>
+        {/* Create Habit Button - Prominent and Centered */}
+        <div className="mb-8 flex justify-center">
           <button
             onClick={() => navigate('/habits/create')}
-            className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl hover:shadow-2xl hover:scale-110 transition-all duration-200 flex items-center space-x-3 font-bold text-lg shadow-lg shadow-blue-500/30"
+            className="group px-12 py-5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-3xl hover:shadow-2xl hover:shadow-blue-500/50 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center space-x-4 font-bold text-xl shadow-xl"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center group-hover:rotate-90 transition-transform duration-300">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span>Create New Habit</span>
+            <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
-            <span>Create Habit</span>
           </button>
+        </div>
+
+        {/* Habits Section */}
+        <div className="mb-6 flex justify-between items-center flex-wrap gap-4">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Your Habits</h3>
+          
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Show All/Today Toggle */}
+            {habits && habits.length > 0 && (
+              <div className="flex items-center gap-2 backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 rounded-2xl p-1 border border-gray-200/50 dark:border-gray-700/50">
+                <button
+                  onClick={() => setShowAllHabits(false)}
+                  className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+                    !showAllHabits
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm font-medium">Today</span>
+                </button>
+                <button
+                  onClick={() => setShowAllHabits(true)}
+                  className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+                    showAllHabits
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  <span className="text-sm font-medium">All</span>
+                </button>
+              </div>
+            )}
+            
+            {/* Modern Sort Toggle */}
+            {habits && habits.length > 0 && (
+              <div className="flex items-center gap-2 backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 rounded-2xl p-1 border border-gray-200/50 dark:border-gray-700/50">
+                <button
+                  onClick={() => setSortBy('created')}
+                  className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+                    sortBy === 'created'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-medium">Recent</span>
+                </button>
+                <button
+                  onClick={() => setSortBy('name')}
+                  className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+                    sortBy === 'name'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  <span className="text-sm font-medium">A-Z</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {isLoading && (
@@ -177,13 +306,14 @@ export function Dashboard() {
           </div>
         )}
 
-        {!isLoading && !error && habits && habits.length > 0 && (
-          <div className={viewType === 'grid' ? 'grid gap-6 md:grid-cols-2 lg:grid-cols-3 items-start' : 'flex flex-col gap-4 max-w-4xl mx-auto'}>
-            {habits.map((habit) => (
+        {!isLoading && !error && filteredAndSortedHabits && filteredAndSortedHabits.length > 0 && (
+          <div className={viewType === 'grid' ? 'grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col gap-4 max-w-4xl mx-auto'}>
+            {filteredAndSortedHabits.map((habit) => (
               <div
                 key={habit.id}
                 onMouseEnter={() => prefetchHabitData(habit.id)}
                 onTouchStart={() => prefetchHabitData(habit.id)}
+                className="w-full"
               >
                 <HabitCard
                   habit={habit}

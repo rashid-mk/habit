@@ -4,6 +4,7 @@ import { db } from '../config/firebase'
 import { useAuthState } from './useAuth'
 import { HabitFormData } from '../components/CreateHabitForm'
 import dayjs from 'dayjs'
+import { calculateAnalyticsLocal } from '../utils/analyticsCalculator'
 
 export interface Habit {
   id: string
@@ -290,18 +291,22 @@ export function useCheckIn() {
           status: 'done',
         })
 
-        // Get habit start date for analytics calculation
-        const habitRef = doc(db, 'users', user.uid, 'habits', habitId)
-        const habitDoc = await getDoc(habitRef)
-        
+        // Calculate and save analytics locally (instant calculation, then save to DB)
+        const habitDoc = await getDoc(doc(db, 'users', user.uid, 'habits', habitId))
         if (habitDoc.exists()) {
-          const habitData = habitDoc.data()
-          const { updateHabitAnalytics } = await import('../utils/analyticsCalculator')
+          const habit = habitDoc.data() as Habit
           
-          // Calculate and update analytics (async, don't block UI)
-          updateHabitAnalytics(user.uid, habitId, habitData.startDate).catch((error) => {
-            console.error('Failed to update analytics:', error)
-          })
+          // Fetch all checks
+          const checksRef = collection(db, 'users', user.uid, 'habits', habitId, 'checks')
+          const checksSnapshot = await getDocs(checksRef)
+          const checks = checksSnapshot.docs.map(d => d.data() as any)
+          
+          // Calculate analytics locally
+          const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate)
+          
+          // Save calculated analytics to database
+          const analyticsRef = doc(db, 'users', user.uid, 'habits', habitId, 'analytics', 'summary')
+          await setDoc(analyticsRef, newAnalytics, { merge: true })
         }
 
         return { dateKey }
@@ -316,10 +321,51 @@ export function useCheckIn() {
         }
       }
     },
+    onMutate: async (variables) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
+      await queryClient.cancelQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
+
+      // Snapshot previous values
+      const previousAnalytics = queryClient.getQueryData(['analytics', user?.uid, variables.habitId])
+      const previousChecks = queryClient.getQueryData(['checks', user?.uid, variables.habitId])
+
+      // Get habit from cache (instant - no Firestore fetch!)
+      const cachedHabit = queryClient.getQueryData(['habit', user?.uid, variables.habitId]) as Habit | undefined
+      
+      if (cachedHabit) {
+        // Get checks from cache
+        const cachedChecks = (queryClient.getQueryData(['checks', user?.uid, variables.habitId]) as CheckIn[] | undefined) || []
+        
+        // Add the new check optimistically
+        const dateKey = dayjs(variables.date).format('YYYY-MM-DD')
+        const optimisticChecks = [
+          ...cachedChecks.filter(c => c.dateKey !== dateKey),
+          { dateKey, completedAt: Timestamp.now(), habitId: variables.habitId, status: 'done' as const }
+        ]
+        
+        // Calculate new analytics instantly from cached data (no async!)
+        const newAnalytics = calculateAnalyticsLocal(optimisticChecks, cachedHabit.startDate)
+        
+        // Update cache immediately for instant UI update
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], newAnalytics)
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], optimisticChecks)
+      }
+
+      return { previousAnalytics, previousChecks }
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousAnalytics) {
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], context.previousAnalytics)
+      }
+      if (context?.previousChecks) {
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], context.previousChecks)
+      }
+    },
     onSuccess: (_, variables) => {
-      // Invalidate analytics query to refetch updated stats
+      // Invalidate to ensure we're in sync with server
       queryClient.invalidateQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
-      // Invalidate checks query if we add one later
       queryClient.invalidateQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
     },
     retry: 2, // Retry failed writes up to 2 times
@@ -355,18 +401,22 @@ export function useUndoCheckIn() {
         const { deleteDoc } = await import('firebase/firestore')
         await deleteDoc(checkRef)
 
-        // Get habit start date for analytics calculation
-        const habitRef = doc(db, 'users', user.uid, 'habits', habitId)
-        const habitDoc = await getDoc(habitRef)
-        
+        // Calculate and save analytics locally after deletion
+        const habitDoc = await getDoc(doc(db, 'users', user.uid, 'habits', habitId))
         if (habitDoc.exists()) {
-          const habitData = habitDoc.data()
-          const { updateHabitAnalytics } = await import('../utils/analyticsCalculator')
+          const habit = habitDoc.data() as Habit
           
-          // Calculate and update analytics (async, don't block UI)
-          updateHabitAnalytics(user.uid, habitId, habitData.startDate).catch((error) => {
-            console.error('Failed to update analytics:', error)
-          })
+          // Fetch all remaining checks
+          const checksRef = collection(db, 'users', user.uid, 'habits', habitId, 'checks')
+          const checksSnapshot = await getDocs(checksRef)
+          const checks = checksSnapshot.docs.map(d => d.data() as any)
+          
+          // Calculate analytics locally
+          const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate)
+          
+          // Save calculated analytics to database
+          const analyticsRef = doc(db, 'users', user.uid, 'habits', habitId, 'analytics', 'summary')
+          await setDoc(analyticsRef, newAnalytics, { merge: true })
         }
 
         return { dateKey }
@@ -381,10 +431,48 @@ export function useUndoCheckIn() {
         }
       }
     },
+    onMutate: async (variables) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
+      await queryClient.cancelQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
+
+      // Snapshot previous values
+      const previousAnalytics = queryClient.getQueryData(['analytics', user?.uid, variables.habitId])
+      const previousChecks = queryClient.getQueryData(['checks', user?.uid, variables.habitId])
+
+      // Get habit from cache (instant - no Firestore fetch!)
+      const cachedHabit = queryClient.getQueryData(['habit', user?.uid, variables.habitId]) as Habit | undefined
+      
+      if (cachedHabit) {
+        // Get checks from cache
+        const cachedChecks = (queryClient.getQueryData(['checks', user?.uid, variables.habitId]) as CheckIn[] | undefined) || []
+        
+        // Remove the check optimistically
+        const dateKey = dayjs(variables.date).format('YYYY-MM-DD')
+        const optimisticChecks = cachedChecks.filter(c => c.dateKey !== dateKey)
+        
+        // Calculate new analytics instantly from cached data (no async!)
+        const newAnalytics = calculateAnalyticsLocal(optimisticChecks, cachedHabit.startDate)
+        
+        // Update cache immediately for instant UI update
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], newAnalytics)
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], optimisticChecks)
+      }
+
+      return { previousAnalytics, previousChecks }
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousAnalytics) {
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], context.previousAnalytics)
+      }
+      if (context?.previousChecks) {
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], context.previousChecks)
+      }
+    },
     onSuccess: (_, variables) => {
-      // Invalidate analytics query to refetch updated stats
+      // Invalidate to ensure we're in sync with server
       queryClient.invalidateQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
-      // Invalidate checks query
       queryClient.invalidateQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
     },
     retry: 2,
@@ -476,18 +564,22 @@ export function useToggleCheckIn() {
           })
         }
 
-        // Trigger analytics update
-        const habitRef = doc(db, 'users', user.uid, 'habits', habitId)
-        const habitDoc = await getDoc(habitRef)
-        
+        // Calculate and save analytics locally after toggle
+        const habitDoc = await getDoc(doc(db, 'users', user.uid, 'habits', habitId))
         if (habitDoc.exists()) {
-          const habitData = habitDoc.data()
-          const { updateHabitAnalytics } = await import('../utils/analyticsCalculator')
+          const habit = habitDoc.data() as Habit
           
-          // Calculate and update analytics (async, don't block UI)
-          updateHabitAnalytics(user.uid, habitId, habitData.startDate).catch((error) => {
-            console.error('Failed to update analytics:', error)
-          })
+          // Fetch all checks
+          const checksRef = collection(db, 'users', user.uid, 'habits', habitId, 'checks')
+          const checksSnapshot = await getDocs(checksRef)
+          const checks = checksSnapshot.docs.map(d => d.data() as any)
+          
+          // Calculate analytics locally
+          const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate)
+          
+          // Save calculated analytics to database
+          const analyticsRef = doc(db, 'users', user.uid, 'habits', habitId, 'analytics', 'summary')
+          await setDoc(analyticsRef, newAnalytics, { merge: true })
         }
 
         return { dateKey, nextStatus }
@@ -501,8 +593,59 @@ export function useToggleCheckIn() {
         }
       }
     },
+    onMutate: async (variables) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
+      await queryClient.cancelQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
+
+      // Snapshot previous values
+      const previousAnalytics = queryClient.getQueryData(['analytics', user?.uid, variables.habitId])
+      const previousChecks = queryClient.getQueryData(['checks', user?.uid, variables.habitId])
+
+      // Get habit from cache (instant - no Firestore fetch!)
+      const cachedHabit = queryClient.getQueryData(['habit', user?.uid, variables.habitId]) as Habit | undefined
+      
+      if (cachedHabit) {
+        // Get checks from cache
+        const cachedChecks = (queryClient.getQueryData(['checks', user?.uid, variables.habitId]) as CheckIn[] | undefined) || []
+        
+        // Calculate next status and update checks optimistically
+        const dateKey = dayjs(variables.date).format('YYYY-MM-DD')
+        const nextStatus = getNextStatus(variables.currentStatus)
+        
+        let optimisticChecks: CheckIn[]
+        if (nextStatus === 'skip') {
+          // Remove the check
+          optimisticChecks = cachedChecks.filter(c => c.dateKey !== dateKey)
+        } else {
+          // Add or update the check
+          optimisticChecks = [
+            ...cachedChecks.filter(c => c.dateKey !== dateKey),
+            { dateKey, completedAt: Timestamp.now(), habitId: variables.habitId, status: nextStatus }
+          ]
+        }
+        
+        // Calculate new analytics instantly from cached data (no async!)
+        const newAnalytics = calculateAnalyticsLocal(optimisticChecks, cachedHabit.startDate)
+        
+        // Update cache immediately for instant UI update
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], newAnalytics)
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], optimisticChecks)
+      }
+
+      return { previousAnalytics, previousChecks }
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousAnalytics) {
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], context.previousAnalytics)
+      }
+      if (context?.previousChecks) {
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], context.previousChecks)
+      }
+    },
     onSuccess: (_, variables) => {
-      // Invalidate analytics and checks queries
+      // Invalidate to ensure we're in sync with server
       queryClient.invalidateQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
       queryClient.invalidateQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
     },

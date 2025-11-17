@@ -5,10 +5,12 @@ import { useUserProfile } from '../hooks/useUserProfile'
 import { updateProfile, updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
 import { db, auth } from '../config/firebase'
+import { useQueryClient } from '@tanstack/react-query'
 
 export function ProfilePage() {
   const { user } = useAuthState()
   const { data: userProfile } = useUserProfile()
+  const queryClient = useQueryClient()
   
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false)
@@ -39,32 +41,50 @@ export function ProfilePage() {
     try {
       if (!user) throw new Error('No user logged in')
 
-      // Update display name in Firebase Auth
-      if (displayName !== userProfile?.displayName) {
-        await updateProfile(user, { displayName })
+      // Optimistically update the UI immediately
+      const previousProfile = userProfile
+      queryClient.setQueryData(['userProfile', user.uid], {
+        ...userProfile,
+        displayName,
+        email,
+      })
+
+      try {
+        // Update display name in Firebase Auth
+        if (displayName !== userProfile?.displayName) {
+          await updateProfile(user, { displayName })
+          
+          // Update display name in Firestore
+          const userRef = doc(db, 'users', user.uid)
+          await setDoc(userRef, { displayName }, { merge: true })
+        }
+
+        // Update email if changed
+        if (email !== user.email && email) {
+          await updateEmail(user, email)
+        }
+
+        // Invalidate to refetch from server
+        queryClient.invalidateQueries({ queryKey: ['userProfile', user.uid] })
+
+        setProfileSuccess('Profile updated successfully!')
+        setIsEditingProfile(false)
         
-        // Update display name in Firestore
-        const userRef = doc(db, 'users', user.uid)
-        await setDoc(userRef, { displayName }, { merge: true })
+        setTimeout(() => setProfileSuccess(''), 3000)
+      } catch (err: any) {
+        // Rollback on error
+        queryClient.setQueryData(['userProfile', user.uid], previousProfile)
+        
+        if (err.code === 'auth/requires-recent-login') {
+          setProfileError('Please log out and log back in to update your email')
+        } else if (err.code === 'auth/email-already-in-use') {
+          setProfileError('This email is already in use')
+        } else {
+          setProfileError('Failed to update profile. Please try again.')
+        }
       }
-
-      // Update email if changed
-      if (email !== user.email && email) {
-        await updateEmail(user, email)
-      }
-
-      setProfileSuccess('Profile updated successfully!')
-      setIsEditingProfile(false)
-      
-      setTimeout(() => setProfileSuccess(''), 3000)
     } catch (err: any) {
-      if (err.code === 'auth/requires-recent-login') {
-        setProfileError('Please log out and log back in to update your email')
-      } else if (err.code === 'auth/email-already-in-use') {
-        setProfileError('This email is already in use')
-      } else {
-        setProfileError('Failed to update profile. Please try again.')
-      }
+      setProfileError('Failed to update profile. Please try again.')
     } finally {
       setProfileLoading(false)
     }

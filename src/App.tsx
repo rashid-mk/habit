@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthGuard } from './components/AuthGuard'
 import { NotificationPrompt } from './components/NotificationPrompt'
 import { SyncStatusIndicator } from './components/SyncStatusIndicator'
+import { MobileBottomNav } from './components/MobileBottomNav'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ViewSettingsProvider } from './contexts/ViewSettingsContext'
@@ -13,6 +14,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m
 const SignupPage = lazy(() => import('./pages/SignupPage').then(m => ({ default: m.SignupPage })))
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
 const CreateHabitPage = lazy(() => import('./pages/CreateHabitPage').then(m => ({ default: m.CreateHabitPage })))
+const EditHabitPage = lazy(() => import('./pages/EditHabitPage').then(m => ({ default: m.EditHabitPage })))
 const HabitDetailPage = lazy(() => import('./pages/HabitDetailPage').then(m => ({ default: m.HabitDetailPage })))
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage').then(m => ({ default: m.ChangePasswordPage })))
 const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })))
@@ -76,6 +78,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/habits/:habitId/edit"
+                  element={
+                    <AuthGuard>
+                      <EditHabitPage />
+                    </AuthGuard>
+                  }
+                />
+                <Route
                   path="/habits/:habitId"
                   element={
                     <AuthGuard>
@@ -120,6 +130,7 @@ function App() {
             </Suspense>
             <NotificationPrompt />
             <SyncStatusIndicator />
+            <MobileBottomNav />
             </BrowserRouter>
           </ViewSettingsProvider>
         </ThemeProvider>

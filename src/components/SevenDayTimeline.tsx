@@ -9,34 +9,47 @@ interface SevenDayTimelineProps {
   habitStartDate: Timestamp
   habitColor?: string
   isBreakHabit: boolean
+  frequency: 'daily' | string[]
 }
 
 export const SevenDayTimeline = memo(function SevenDayTimeline({
   habitId,
   habitColor,
   isBreakHabit,
+  frequency,
 }: SevenDayTimelineProps) {
   const [loadingDate, setLoadingDate] = useState<string | null>(null)
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, CheckInStatus>>(new Map())
   
   // Calculate previous 7 days (not including today)
   const dateRange = useMemo(() => {
     const today = dayjs()
     const dates = []
     
-    // Start from yesterday (i=1) and go back 7 days
-    // Always show all 7 days regardless of habit start date
-    for (let i = 1; i <= 7; i++) {
+    // If frequency is an array of specific days, filter to show only those days
+    const selectedDays = frequency === 'daily' ? null : frequency
+    
+    // Start from yesterday (i=1) and go back up to 30 days to find 7 matching days
+    let i = 1
+    while (dates.length < 7 && i <= 30) {
       const date = today.subtract(i, 'day')
-      dates.push({
-        dateKey: date.format('YYYY-MM-DD'),
-        dayName: date.format('ddd'),
-        dayNumber: date.date(),
-        isToday: false, // None of these are today
-      })
+      const dayName = date.format('ddd') // e.g., 'Mon', 'Tue'
+      const dayNameLower = date.format('dddd').toLowerCase() // e.g., 'monday', 'tuesday'
+      
+      // If daily or if this day matches selected days, include it
+      if (!selectedDays || selectedDays.includes(dayNameLower)) {
+        dates.push({
+          dateKey: date.format('YYYY-MM-DD'),
+          dayName,
+          dayNumber: date.date(),
+          isToday: false, // None of these are today
+        })
+      }
+      i++
     }
     
     return dates
-  }, [])
+  }, [frequency])
 
   // Fetch check-ins for the date range
   const startDateStr = dateRange[dateRange.length - 1]?.dateKey
@@ -65,29 +78,64 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
         status = check.status || 'done'
       }
       
+      // Use optimistic update if available, otherwise use server status
+      const optimisticStatus = optimisticUpdates.get(date.dateKey)
+      if (optimisticStatus !== undefined) {
+        status = optimisticStatus
+      }
+      
       return {
         ...date,
         status,
       }
     })
-  }, [checks, dateRange])
+  }, [checks, dateRange, optimisticUpdates])
 
-  const handleStatusChange = async (date: string) => {
+  const handleStatusChange = (date: string) => {
     const dateData = timelineDates.find(d => d.dateKey === date)
     if (!dateData) return
 
-    setLoadingDate(date)
-    try {
-      await toggleMutation.mutateAsync({
-        habitId,
-        date,
-        currentStatus: dateData.status,
-      })
-    } catch (error) {
-      console.error('Failed to toggle status:', error)
-    } finally {
-      setLoadingDate(null)
+    // Calculate next status
+    const getNextStatus = (current: CheckInStatus): CheckInStatus => {
+      if (current === 'skip') return 'done'
+      if (current === 'done') return 'not_done'
+      return 'skip'
     }
+    
+    const currentStatus = dateData.status
+    const nextStatus = getNextStatus(currentStatus)
+    
+    // Update optimistically for instant UI feedback - THIS MUST HAPPEN FIRST
+    setOptimisticUpdates(prev => {
+      const newMap = new Map(prev)
+      newMap.set(date, nextStatus)
+      return newMap
+    })
+
+    // Then do the async operation
+    setLoadingDate(date)
+    toggleMutation.mutateAsync({
+      habitId,
+      date,
+      currentStatus,
+    }).then(() => {
+      // Clear optimistic update after server confirms
+      setOptimisticUpdates(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(date)
+        return newMap
+      })
+    }).catch((error) => {
+      console.error('Failed to toggle status:', error)
+      // Rollback optimistic update on error
+      setOptimisticUpdates(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(date)
+        return newMap
+      })
+    }).finally(() => {
+      setLoadingDate(null)
+    })
   }
 
   // Always show the timeline section, even if no dates yet
