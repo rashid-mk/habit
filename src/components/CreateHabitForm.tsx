@@ -12,6 +12,7 @@ interface CreateHabitFormProps {
 export interface HabitFormData {
   habitName: string
   habitType: 'build' | 'break'
+  color?: string
   frequency: 'daily' | string[]
   duration: number
   reminderTime?: string
@@ -27,9 +28,23 @@ const WEEKDAYS = [
   { value: 'sunday', label: 'Sunday' },
 ]
 
+const HABIT_COLORS = [
+  { name: 'Blue', value: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
+  { name: 'Purple', value: '#8b5cf6', gradient: 'from-purple-500 to-purple-600' },
+  { name: 'Pink', value: '#ec4899', gradient: 'from-pink-500 to-pink-600' },
+  { name: 'Red', value: '#ef4444', gradient: 'from-red-500 to-red-600' },
+  { name: 'Orange', value: '#f97316', gradient: 'from-orange-500 to-orange-600' },
+  { name: 'Yellow', value: '#eab308', gradient: 'from-yellow-500 to-yellow-600' },
+  { name: 'Green', value: '#10b981', gradient: 'from-green-500 to-green-600' },
+  { name: 'Teal', value: '#14b8a6', gradient: 'from-teal-500 to-teal-600' },
+  { name: 'Cyan', value: '#06b6d4', gradient: 'from-cyan-500 to-cyan-600' },
+  { name: 'Indigo', value: '#6366f1', gradient: 'from-indigo-500 to-indigo-600' },
+]
+
 export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: CreateHabitFormProps) {
   const [habitName, setHabitName] = useState('')
   const [habitType, setHabitType] = useState<'build' | 'break'>('build')
+  const [color, setColor] = useState(HABIT_COLORS[0].value)
   const [frequencyType, setFrequencyType] = useState<'daily' | 'specific'>('daily')
   const [selectedDays, setSelectedDays] = useState<string[]>([])
   const [duration, setDuration] = useState(30)
@@ -87,6 +102,7 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
     const habitData: HabitFormData = {
       habitName: habitName.trim(),
       habitType,
+      color,
       frequency,
       duration,
       reminderTime: reminderTime || undefined,
@@ -268,6 +284,39 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
               Quit unwanted behaviors
             </span>
           </button>
+        </div>
+      </div>
+
+      {/* Color Picker */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
+          Choose a color
+        </label>
+        <div className="grid grid-cols-10 gap-2">
+          {HABIT_COLORS.map((colorOption) => (
+            <button
+              key={colorOption.value}
+              type="button"
+              onClick={() => setColor(colorOption.value)}
+              className={`group relative aspect-square rounded-lg transition-all duration-200 ${
+                color === colorOption.value
+                  ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-900 scale-110'
+                  : 'hover:scale-105'
+              }`}
+              style={{ 
+                backgroundColor: colorOption.value,
+                ringColor: color === colorOption.value ? colorOption.value : 'transparent'
+              }}
+              disabled={isLoading}
+              title={colorOption.name}
+            >
+              {color === colorOption.value && (
+                <svg className="w-4 h-4 text-white absolute inset-0 m-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 

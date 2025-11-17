@@ -100,11 +100,11 @@ export function Dashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <div className="backdrop-blur-xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 dark:from-blue-500/20 dark:to-blue-600/20 rounded-2xl p-6 border border-white/20 dark:border-gray-700/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Total Habits</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Habits</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">{totalHabits}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-blue-500/20 dark:bg-blue-500/30 flex items-center justify-center">
@@ -118,28 +118,12 @@ export function Dashboard() {
           <div className="backdrop-blur-xl bg-gradient-to-br from-green-500/10 to-green-600/10 dark:from-green-500/20 dark:to-green-600/20 rounded-2xl p-6 border border-white/20 dark:border-gray-700/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Active Today</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active Today</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">{activeToday}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-green-500/20 dark:bg-green-500/30 flex items-center justify-center">
                 <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="backdrop-blur-xl bg-gradient-to-br from-purple-500/10 to-purple-600/10 dark:from-purple-500/20 dark:to-purple-600/20 rounded-2xl p-6 border border-white/20 dark:border-gray-700/20">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Completion Rate</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {habits && habits.length > 0 ? Math.round((activeToday / totalHabits) * 100) : 0}%
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-purple-500/20 dark:bg-purple-500/30 flex items-center justify-center">
-                <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
               </div>
             </div>
@@ -151,10 +135,10 @@ export function Dashboard() {
           <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Your Habits</h3>
           <button
             onClick={() => navigate('/habits/create')}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2 font-medium"
+            className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl hover:shadow-2xl hover:scale-110 transition-all duration-200 flex items-center space-x-3 font-bold text-lg shadow-lg shadow-blue-500/30"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
             <span>Create Habit</span>
           </button>
@@ -194,7 +178,7 @@ export function Dashboard() {
         )}
 
         {!isLoading && !error && habits && habits.length > 0 && (
-          <div className={viewType === 'grid' ? 'grid gap-6 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col gap-4 max-w-4xl mx-auto'}>
+          <div className={viewType === 'grid' ? 'grid gap-6 md:grid-cols-2 lg:grid-cols-3 items-start' : 'flex flex-col gap-4 max-w-4xl mx-auto'}>
             {habits.map((habit) => (
               <div
                 key={habit.id}

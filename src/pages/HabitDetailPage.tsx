@@ -218,45 +218,94 @@ export function HabitDetailPage() {
 
 
 
-        {/* History Chart */}
-        {!checksLoading && checks && checks.length > 0 && (
+
+
+        {/* Last 30 Days History */}
+        {!checksLoading && checks && (
           <div className="backdrop-blur-xl bg-white/50 dark:bg-gray-800/50 rounded-3xl border border-white/20 dark:border-gray-700/20 p-6 shadow-xl">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center">
               <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              History
+              Last 30 Days History
             </h2>
-            <div className="h-64 flex items-end justify-between space-x-2">
-              {checks.slice(-14).map((check, index) => {
-                const isCompleted = check.completedAt !== null
-                const height = isCompleted ? Math.random() * 60 + 40 : 20
-                return (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div
-                      className={`w-full rounded-t-lg transition-all duration-300 ${
-                        isCompleted
-                          ? 'bg-gradient-to-t from-blue-500 to-blue-400 dark:from-blue-600 dark:to-blue-500'
-                          : 'bg-gray-200 dark:bg-gray-700'
-                      }`}
-                      style={{ height: `${height}%` }}
-                    />
-                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      {dayjs(check.dateKey).format('DD')}
+            <div className="grid grid-cols-10 gap-2">
+              {(() => {
+                const last30Days = []
+                const today = dayjs()
+                for (let i = 29; i >= 0; i--) {
+                  const date = today.subtract(i, 'day')
+                  const dateKey = date.format('YYYY-MM-DD')
+                  const check = checks.find(c => c.dateKey === dateKey)
+                  
+                  let status: 'done' | 'not_done' | 'skip' = 'skip'
+                  if (check) {
+                    status = check.status || 'done'
+                  }
+                  
+                  last30Days.push({
+                    date: date,
+                    dateKey: dateKey,
+                    status: status,
+                    dayNumber: date.date(),
+                    monthDay: date.format('MMM D')
+                  })
+                }
+                return last30Days.map((day, index) => (
+                  <div 
+                    key={index} 
+                    className="flex flex-col items-center group relative"
+                    title={`${day.monthDay}: ${day.status === 'done' ? 'Completed' : day.status === 'not_done' ? 'Not Done' : 'Skipped'}`}
+                  >
+                    <div className={`w-full aspect-square rounded-lg transition-all duration-200 flex items-center justify-center ${
+                      day.status === 'done'
+                        ? 'bg-gradient-to-br from-green-500 to-emerald-500 shadow-md group-hover:scale-110'
+                        : day.status === 'not_done'
+                        ? 'bg-gradient-to-br from-red-500 to-orange-500 shadow-md group-hover:scale-110'
+                        : 'bg-gray-200 dark:bg-gray-700 group-hover:bg-gray-300 dark:group-hover:bg-gray-600'
+                    }`}>
+                      {day.status === 'done' && (
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      {day.status === 'not_done' && (
+                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                      {day.dayNumber}
                     </span>
+                    
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-2 hidden group-hover:block z-10">
+                      <div className="bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg py-1 px-2 whitespace-nowrap shadow-lg">
+                        {day.monthDay}: {day.status === 'done' ? '✓ Done' : day.status === 'not_done' ? '✗ Not Done' : '- Skipped'}
+                      </div>
+                    </div>
                   </div>
-                )
-              })}
+                ))
+              })()}
+            </div>
+            
+            {/* Legend */}
+            <div className="mt-6 flex items-center justify-center gap-6 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-gradient-to-br from-green-500 to-emerald-500"></div>
+                <span className="text-gray-600 dark:text-gray-400">Done</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-gradient-to-br from-red-500 to-orange-500"></div>
+                <span className="text-gray-600 dark:text-gray-400">Not Done</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-700"></div>
+                <span className="text-gray-600 dark:text-gray-400">Skipped</span>
+              </div>
             </div>
           </div>
-        )}
-
-        {/* Calendar View */}
-        {!checksLoading && checks && habit && (
-          <TimelineGraph
-            checks={checks}
-            startDate={habit.startDate?.toDate ? habit.startDate.toDate() : new Date()}
-          />
         )}
 
         {/* Best Streaks */}

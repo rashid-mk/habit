@@ -9,6 +9,7 @@ export interface Habit {
   id: string
   habitName: string
   habitType?: 'build' | 'break'
+  color?: string
   frequency: 'daily' | string[]
   duration: number
   reminderTime?: string
@@ -42,6 +43,7 @@ export function useCreateHabit() {
         const habitDoc = await addDoc(habitsRef, {
           habitName: habitData.habitName,
           habitType: habitData.habitType, // Add habitType field
+          color: habitData.color || null, // Add color field
           frequency: habitData.frequency,
           duration: habitData.duration,
           reminderTime: habitData.reminderTime || null,
@@ -205,13 +207,25 @@ export interface CheckIn {
   dateKey: string
   completedAt: Timestamp
   habitId: string
+  status?: 'done' | 'not_done' // Optional for backward compatibility
 }
 
-export function useHabitChecks(habitId: string) {
+export interface UseHabitChecksOptions {
+  habitId: string
+  startDate?: string // YYYY-MM-DD
+  endDate?: string // YYYY-MM-DD
+}
+
+export function useHabitChecks(options: UseHabitChecksOptions | string) {
   const { user } = useAuthState()
+  
+  // Support both old string format and new options format for backward compatibility
+  const habitId = typeof options === 'string' ? options : options.habitId
+  const startDate = typeof options === 'string' ? undefined : options.startDate
+  const endDate = typeof options === 'string' ? undefined : options.endDate
 
   return useQuery({
-    queryKey: ['checks', user?.uid, habitId],
+    queryKey: ['checks', user?.uid, habitId, startDate, endDate],
     queryFn: async () => {
       if (!user) {
         throw new Error('User must be authenticated to fetch check-ins')
@@ -219,7 +233,18 @@ export function useHabitChecks(habitId: string) {
 
       try {
         const checksRef = collection(db, 'users', user.uid, 'habits', habitId, 'checks')
-        const checksQuery = query(checksRef)
+        let checksQuery = query(checksRef)
+        
+        // Add date range filtering if provided
+        if (startDate && endDate) {
+          const { where } = await import('firebase/firestore')
+          checksQuery = query(
+            checksRef,
+            where('dateKey', '>=', startDate),
+            where('dateKey', '<=', endDate)
+          )
+        }
+        
         const snapshot = await getDocs(checksQuery)
 
         const checks: CheckIn[] = []
@@ -262,6 +287,7 @@ export function useCheckIn() {
           dateKey,
           completedAt: serverTimestamp(),
           habitId,
+          status: 'done',
         })
 
         // Get habit start date for analytics calculation
@@ -397,5 +423,90 @@ export function useDeleteHabit() {
       // Invalidate habits query to refetch the list
       queryClient.invalidateQueries({ queryKey: ['habits', user?.uid] })
     },
+  })
+}
+
+export type CheckInStatus = 'skip' | 'done' | 'not_done'
+
+// Helper function to get next status in cycle
+const getNextStatus = (current: CheckInStatus): CheckInStatus => {
+  if (current === 'skip') return 'done'
+  if (current === 'done') return 'not_done'
+  return 'skip'
+}
+
+export function useToggleCheckIn() {
+  const { user } = useAuthState()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ habitId, date, currentStatus }: { habitId: string; date: string; currentStatus: CheckInStatus }) => {
+      if (!user) {
+        throw new Error('User must be authenticated to toggle check-in')
+      }
+
+      const dateKey = dayjs(date).format('YYYY-MM-DD')
+      const nextStatus = getNextStatus(currentStatus)
+
+      try {
+        const checkRef = doc(db, 'users', user.uid, 'habits', habitId, 'checks', dateKey)
+
+        if (nextStatus === 'skip') {
+          // Delete check document
+          const { deleteDoc } = await import('firebase/firestore')
+          const existingCheck = await getDoc(checkRef)
+          if (existingCheck.exists()) {
+            await deleteDoc(checkRef)
+          }
+        } else if (nextStatus === 'done') {
+          // Create or update check document with done status
+          await setDoc(checkRef, {
+            dateKey,
+            completedAt: serverTimestamp(),
+            habitId,
+            status: 'done',
+          })
+        } else {
+          // Create or update check document with not_done status
+          await setDoc(checkRef, {
+            dateKey,
+            completedAt: serverTimestamp(),
+            habitId,
+            status: 'not_done',
+          })
+        }
+
+        // Trigger analytics update
+        const habitRef = doc(db, 'users', user.uid, 'habits', habitId)
+        const habitDoc = await getDoc(habitRef)
+        
+        if (habitDoc.exists()) {
+          const habitData = habitDoc.data()
+          const { updateHabitAnalytics } = await import('../utils/analyticsCalculator')
+          
+          // Calculate and update analytics (async, don't block UI)
+          updateHabitAnalytics(user.uid, habitId, habitData.startDate).catch((error) => {
+            console.error('Failed to update analytics:', error)
+          })
+        }
+
+        return { dateKey, nextStatus }
+      } catch (error: any) {
+        if (error.code === 'permission-denied') {
+          throw new Error('You do not have permission to toggle check-in')
+        } else if (error.code === 'unavailable') {
+          throw new Error('Connection lost. Changes will sync when online')
+        } else {
+          throw new Error('Failed to toggle check-in. Please try again')
+        }
+      }
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate analytics and checks queries
+      queryClient.invalidateQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
+      queryClient.invalidateQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
+    },
+    retry: 2,
+    retryDelay: 1000,
   })
 }

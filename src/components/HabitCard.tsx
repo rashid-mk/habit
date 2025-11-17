@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useHabitAnalytics, Habit, useCheckIn, useUndoCheckIn } from '../hooks/useHabits'
+import { useHabitAnalytics, Habit, useCheckIn, useUndoCheckIn, useHabitChecks, useToggleCheckIn } from '../hooks/useHabits'
 import dayjs from 'dayjs'
+import { SevenDayTimeline } from './SevenDayTimeline'
 
 interface HabitCardProps {
   habit: Habit
@@ -11,74 +12,87 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
   const { data: analytics, isLoading } = useHabitAnalytics(habit.id)
   const checkInMutation = useCheckIn()
   const undoCheckInMutation = useUndoCheckIn()
-  const [actionTaken, setActionTaken] = useState<'done' | 'skip' | 'failed' | null>(null)
-  const [showConfetti, setShowConfetti] = useState(false)
-  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; color: string; delay: number }>>([])
+  const toggleCheckInMutation = useToggleCheckIn()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [showCelebration, setShowCelebration] = useState(false)
+  const [showDisappointment, setShowDisappointment] = useState(false)
   // Default to 'build' if habitType is not set (for backward compatibility)
   const isBreakHabit = habit.habitType === 'break'
   const today = dayjs().format('YYYY-MM-DD')
+  
+  // Fetch today's check-in status
+  const { data: todayChecks } = useHabitChecks({
+    habitId: habit.id,
+    startDate: today,
+    endDate: today,
+  })
+  
+  // Determine today's status from Firestore
+  const todayCheck = todayChecks?.[0]
+  const todayStatus: 'done' | 'not_done' | null = todayCheck 
+    ? (todayCheck.status || 'done') 
+    : null
 
-  const handleAction = async (e: React.MouseEvent, action: 'done' | 'skip' | 'failed') => {
+  const handleAction = async (e: React.MouseEvent, action: 'done' | 'not_done' | 'skip') => {
     e.stopPropagation() // Prevent card click
     
     if (action === 'done') {
-      // Trigger confetti animation
-      setShowConfetti(true)
-      
-      // Generate particles
-      const newParticles = Array.from({ length: 12 }, (_, i) => ({
-        id: i,
-        x: (Math.random() - 0.5) * 200,
-        y: -Math.random() * 150 - 50,
-        color: isBreakHabit 
-          ? ['#ef4444', '#f97316', '#fb923c'][Math.floor(Math.random() * 3)]
-          : ['#3b82f6', '#8b5cf6', '#10b981'][Math.floor(Math.random() * 3)],
-        delay: Math.random() * 0.1,
-      }))
-      setParticles(newParticles)
-      
-      // Clear confetti after animation
-      setTimeout(() => {
-        setShowConfetti(false)
-        setParticles([])
-      }, 1000)
-      
-      await checkInMutation.mutateAsync({ habitId: habit.id, date: today })
-    } else if (action === 'failed') {
-      // Delete check-in if it exists (marking as not done/failed)
+      if (todayStatus === 'done') {
+        // If already done, unmark it (delete check-in)
+        await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
+      } else {
+        // Show celebration when marking as done
+        setShowCelebration(true)
+        setTimeout(() => setShowCelebration(false), 1000)
+        
+        // Mark as done
+        await checkInMutation.mutateAsync({ habitId: habit.id, date: today })
+      }
+    } else if (action === 'not_done') {
+      if (todayStatus === 'not_done') {
+        // If already not_done, unmark it (delete check-in)
+        await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
+      } else {
+        // Show disappointment animation when marking as not done
+        if (todayStatus === 'done') {
+          setShowDisappointment(true)
+          setTimeout(() => setShowDisappointment(false), 1000)
+        }
+        
+        // Mark as not_done - we need to create a check-in with not_done status
+        // First delete any existing check-in
+        if (todayStatus) {
+          await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
+        }
+        // Then create a not_done check-in using toggle from skip
+        await toggleCheckInMutation.mutateAsync({ 
+          habitId: habit.id, 
+          date: today, 
+          currentStatus: 'skip' 
+        })
+        // Toggle again to get to not_done (skip → done → not_done)
+        await toggleCheckInMutation.mutateAsync({ 
+          habitId: habit.id, 
+          date: today, 
+          currentStatus: 'done' 
+        })
+      }
+    } else if (action === 'skip') {
+      // Delete check-in to mark as skipped
       await undoCheckInMutation.mutateAsync({ habitId: habit.id, date: today })
     }
-    setActionTaken(action)
   }
 
-  const getFrequencyDisplay = () => {
-    if (habit.frequency === 'daily') return 'Daily'
-    if (Array.isArray(habit.frequency)) {
-      return habit.frequency.map(d => d.charAt(0).toUpperCase()).join(', ')
-    }
-    return habit.frequency
+  const toggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsExpanded(!isExpanded)
   }
 
   return (
-    <>
-      <style>{`
-        @keyframes confetti-pop {
-          0% {
-            opacity: 1;
-            transform: translate(0, 0) scale(0) rotate(0deg);
-          }
-          50% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-            transform: translate(var(--tx), var(--ty)) scale(1) rotate(360deg);
-          }
-        }
-      `}</style>
-      <div
-        onClick={onClick}
-        className={`group backdrop-blur-xl rounded-2xl border-2 p-6 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 relative overflow-hidden ${
+    <div
+        className={`group backdrop-blur-xl rounded-2xl border-2 p-4 cursor-pointer hover:shadow-xl transition-all duration-300 relative overflow-hidden w-full flex flex-col ${
+          isExpanded ? '' : 'hover:scale-105'
+        } ${
           isBreakHabit
             ? 'bg-gradient-to-br from-red-50/60 to-orange-50/60 dark:from-red-900/20 dark:to-orange-900/20 border-red-300/40 dark:border-red-700/40 hover:border-red-400/60 dark:hover:border-red-600/60 hover:shadow-red-200/50 dark:hover:shadow-red-900/50'
             : 'bg-gradient-to-br from-white/60 to-blue-50/40 dark:from-gray-800/60 dark:to-blue-900/20 border-blue-200/30 dark:border-gray-700/30 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-blue-200/50 dark:hover:shadow-blue-900/50'
@@ -90,50 +104,221 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
             ? 'bg-gradient-to-br from-red-500/10 to-orange-500/10'
             : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10'
         }`}></div>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4 relative z-10">
-        <div className="flex-1">
-          <div className="flex items-center space-x-2 mb-1">
-            <h3 className={`text-lg font-bold transition-colors ${
-              isBreakHabit
-                ? 'text-gray-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400'
-                : 'text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400'
-            }`}>
-              {habit.habitName}
-            </h3>
-            <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full shadow-sm ${
-              isBreakHabit
-                ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white'
-                : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white'
-            }`}>
-              {isBreakHabit ? 'Break' : 'Build'}
-            </span>
-          </div>
-          <div className={`flex items-center space-x-2 text-sm ${
-            isBreakHabit
-              ? 'text-red-700 dark:text-red-300'
-              : 'text-gray-600 dark:text-gray-400'
-          }`}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span className="font-medium">{getFrequencyDisplay()}</span>
-          </div>
-        </div>
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg ${
-          isBreakHabit
-            ? 'bg-gradient-to-br from-red-500 to-orange-500 shadow-red-500/30'
-            : 'bg-gradient-to-br from-blue-500 to-purple-500 shadow-blue-500/30'
-        }`}>
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {isBreakHabit ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      {/* Compact Header - Always Visible */}
+      <div className="space-y-3 relative z-10">
+        {/* Top Row: Name and Actions */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1" onClick={onClick}>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className={`text-lg font-bold transition-colors ${
+                isBreakHabit
+                  ? 'text-gray-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400'
+                  : 'text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400'
+              }`}>
+                {habit.habitName}
+              </h3>
+              <span 
+                className={`px-2 py-0.5 text-xs font-semibold rounded-full shadow-sm text-white flex-shrink-0 ${
+                  !habit.color && (isBreakHabit
+                    ? 'bg-gradient-to-r from-red-500 to-orange-500'
+                    : 'bg-gradient-to-r from-blue-500 to-purple-500')
+                }`}
+                style={habit.color ? { 
+                  background: `linear-gradient(to right, ${habit.color}, ${habit.color}dd)`
+                } : undefined}
+              >
+                {isBreakHabit ? 'break' : 'build'}
+              </span>
+            </div>
+            
+            {/* Today's Status Indicator */}
+            {todayStatus && (
+              <div className={`text-xs font-medium flex items-center gap-1 ${
+                todayStatus === 'done'
+                  ? isBreakHabit
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-green-600 dark:text-green-400'
+                  : 'text-orange-600 dark:text-orange-400'
+              }`}>
+                {todayStatus === 'done' ? (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>{isBreakHabit ? 'Resisted today' : 'Completed today'}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span>{isBreakHabit ? 'Failed today' : 'Not done today'}</span>
+                  </>
+                )}
+              </div>
             )}
-          </svg>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="relative">
+              <button
+                onClick={(e) => handleAction(e, 'done')}
+                disabled={checkInMutation.isPending || undoCheckInMutation.isPending}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-md ${
+                  todayStatus === 'done'
+                    ? isBreakHabit
+                      ? 'bg-gradient-to-br from-red-600 to-orange-600 ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-800'
+                      : 'bg-gradient-to-br from-green-600 to-emerald-600 ring-2 ring-green-400 ring-offset-2 dark:ring-offset-gray-800'
+                    : isBreakHabit
+                    ? 'bg-gradient-to-br from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 shadow-red-500/30'
+                    : 'bg-gradient-to-br from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-green-500/30'
+                } disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110 active:scale-95`}
+                title={isBreakHabit ? "Resisted" : "Done"}
+              >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+              
+              {/* Celebration Animation */}
+              {showCelebration && (
+                <div className="absolute inset-0 pointer-events-none overflow-visible">
+                  {[...Array(12)].map((_, i) => {
+                    const angle = (i * 30) * (Math.PI / 180);
+                    const distance = 40 + Math.random() * 20;
+                    const x = Math.cos(angle) * distance;
+                    const y = Math.sin(angle) * distance;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute top-1/2 left-1/2 w-3 h-3 rounded-full"
+                        style={{
+                          background: isBreakHabit 
+                            ? `hsl(${Math.random() * 60}, 100%, ${50 + Math.random() * 20}%)`
+                            : `hsl(${120 + Math.random() * 60}, 100%, ${50 + Math.random() * 20}%)`,
+                          animation: 'popOut 0.8s ease-out forwards',
+                          transform: `translate(-50%, -50%)`,
+                          '--tx': `${x}px`,
+                          '--ty': `${y}px`,
+                          animationDelay: `${i * 0.03}s`,
+                          boxShadow: '0 0 8px currentColor',
+                        } as React.CSSProperties}
+                      />
+                    );
+                  })}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl" style={{
+                    animation: 'popScale 0.6s ease-out'
+                  }}>
+                    ✨
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <button
+                onClick={(e) => handleAction(e, 'not_done')}
+                disabled={checkInMutation.isPending || undoCheckInMutation.isPending || toggleCheckInMutation.isPending}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                  todayStatus === 'not_done'
+                    ? isBreakHabit
+                      ? 'bg-orange-200 dark:bg-orange-800 ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-800 text-orange-700 dark:text-orange-200'
+                      : 'bg-red-200 dark:bg-red-800 ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-800 text-red-700 dark:text-red-200'
+                    : isBreakHabit
+                    ? 'bg-orange-100/80 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border-2 border-orange-300 dark:border-orange-700'
+                    : 'bg-red-100/80 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 border-2 border-red-300 dark:border-red-700'
+                } disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110 active:scale-95`}
+                title={isBreakHabit ? "Failed" : "Not Done"}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              
+              {/* Disappointment Animation */}
+              {showDisappointment && (
+                <div className="absolute inset-0 pointer-events-none overflow-visible">
+                  {[...Array(6)].map((_, i) => {
+                    const angle = (i * 60) * (Math.PI / 180);
+                    const distance = 25 + Math.random() * 15;
+                    const x = Math.cos(angle) * distance;
+                    const y = Math.sin(angle) * distance;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute top-1/2 left-1/2 w-2 h-2 rounded-full"
+                        style={{
+                          background: '#666',
+                          animation: 'dropDown 1s ease-in forwards',
+                          transform: `translate(-50%, -50%)`,
+                          '--tx': `${x}px`,
+                          '--ty': `${y + 30}px`,
+                          animationDelay: `${i * 0.1}s`,
+                        } as React.CSSProperties}
+                      />
+                    );
+                  })}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" style={{
+                    animation: 'sadShake 0.8s ease-out'
+                  }}>
+                    😞
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={(e) => handleAction(e, 'skip')}
+              disabled={checkInMutation.isPending || undoCheckInMutation.isPending || toggleCheckInMutation.isPending}
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                !todayStatus
+                  ? 'bg-gray-300 dark:bg-gray-600 ring-2 ring-gray-400 ring-offset-2 dark:ring-offset-gray-800 text-gray-700 dark:text-gray-200'
+                  : 'bg-gray-100/80 dark:bg-gray-700/30 hover:bg-gray-200 dark:hover:bg-gray-600/50 text-gray-600 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600'
+              } disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110 active:scale-95`}
+              title="Skip"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {/* Polished Expand Button - Only when collapsed */}
+        {!isExpanded && (
+          <button
+            onClick={toggleExpand}
+            className={`mt-4 w-full py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 group/btn ${
+              isBreakHabit
+                ? 'bg-red-100/60 dark:bg-red-900/20 hover:bg-red-200/80 dark:hover:bg-red-900/30 border border-red-200/60 dark:border-red-800/40 text-red-700 dark:text-red-300'
+                : 'bg-blue-100/60 dark:bg-blue-900/20 hover:bg-blue-200/80 dark:hover:bg-blue-900/30 border border-blue-200/60 dark:border-blue-800/40 text-blue-700 dark:text-blue-300'
+            }`}
+            title="Show Details"
+          >
+            <span className="text-sm font-medium">Show Details</span>
+            <svg className="w-4 h-4 transition-transform group-hover/btn:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+
       </div>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="mt-4 space-y-4 animate-slide-in"
+          onClick={(e) => e.stopPropagation()}
+        >
+        {/* 7-Day Timeline */}
+        <div onClick={(e) => e.stopPropagation()}>
+          <SevenDayTimeline
+            habitId={habit.id}
+            habitStartDate={habit.startDate}
+            habitColor={habit.color}
+            isBreakHabit={isBreakHabit}
+          />
+        </div>
 
       {/* Stats */}
       {isLoading && (
@@ -227,120 +412,34 @@ export function HabitCard({ habit, onClick }: HabitCardProps) {
         </div>
       )}
 
-      {/* Quick Actions */}
-      {!actionTaken && (
-        <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 relative z-10">
-          <div className="grid grid-cols-2 gap-2 relative">
-            <button
-              onClick={(e) => handleAction(e, 'done')}
-              disabled={checkInMutation.isPending || undoCheckInMutation.isPending}
-              className={`relative col-span-2 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg overflow-visible ${
-                isBreakHabit
-                  ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white shadow-red-500/30 hover:shadow-red-500/50'
-                  : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-green-500/30 hover:shadow-green-500/50'
-              } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 hover:scale-105 active:scale-95`}
-            >
-              {/* Confetti Particles */}
-              {showConfetti && particles.map((particle) => (
-                <div
-                  key={particle.id}
-                  className="absolute pointer-events-none"
-                  style={{
-                    left: '50%',
-                    top: '50%',
-                    animation: `confetti-pop 0.8s ease-out forwards`,
-                    animationDelay: `${particle.delay}s`,
-                    // @ts-ignore
-                    '--tx': `${particle.x}px`,
-                    '--ty': `${particle.y}px`,
-                  }}
-                >
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{
-                      backgroundColor: particle.color,
-                      boxShadow: `0 0 15px ${particle.color}`,
-                    }}
-                  />
-                </div>
-              ))}
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isBreakHabit ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                )}
-              </svg>
-              <span>{isBreakHabit ? 'Resisted Today' : 'Done'}</span>
-            </button>
-            
-            <button
-              onClick={(e) => handleAction(e, 'failed')}
-              disabled={checkInMutation.isPending || undoCheckInMutation.isPending}
-              className={`py-2.5 px-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 hover:scale-105 active:scale-95 ${
-                isBreakHabit
-                  ? 'bg-orange-100/80 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700'
-                  : 'bg-red-100/80 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span>{isBreakHabit ? 'Failed' : 'Not Done'}</span>
-            </button>
-            
-            <button
-              onClick={(e) => handleAction(e, 'skip')}
-              disabled={checkInMutation.isPending || undoCheckInMutation.isPending}
-              className="py-2.5 px-3 rounded-xl font-semibold text-sm bg-gray-200/80 dark:bg-gray-700/80 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 hover:scale-105 active:scale-95"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              </svg>
-              <span>Skip</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Action Taken Feedback */}
-      {actionTaken && (
-        <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 relative z-10">
-          <div className={`py-3 px-4 rounded-xl text-center text-sm font-semibold shadow-lg ${
-            actionTaken === 'done'
-              ? isBreakHabit
-                ? 'bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/40 dark:to-orange-900/40 text-red-700 dark:text-red-200 border-2 border-red-300 dark:border-red-700'
-                : 'bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 text-green-700 dark:text-green-200 border-2 border-green-300 dark:border-green-700'
-              : actionTaken === 'failed'
-              ? isBreakHabit
-                ? 'bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900/40 dark:to-red-900/40 text-orange-700 dark:text-orange-200 border-2 border-orange-300 dark:border-orange-700'
-                : 'bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/40 dark:to-orange-900/40 text-red-700 dark:text-red-200 border-2 border-red-300 dark:border-red-700'
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-gray-300 dark:border-gray-600'
-          }`}>
-            {actionTaken === 'done' 
-              ? isBreakHabit 
-                ? '🛡️ Successfully resisted today!' 
-                : '✓ Completed today!'
-              : actionTaken === 'failed'
-              ? isBreakHabit
-                ? '❌ Failed today - Keep trying!'
-                : '❌ Not done today'
-              : '→ Skipped for today'}
-          </div>
-        </div>
-      )}
-
       {/* Footer */}
       <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <span>{habit.duration} days goal</span>
-        <span className="flex items-center space-x-1">
+        <button 
+          onClick={onClick}
+          className="flex items-center space-x-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+        >
           <span>View details</span>
           <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-        </span>
+        </button>
       </div>
-      </div>
-    </>
+
+      {/* Collapse Button */}
+      {isExpanded && (
+        <button
+          onClick={toggleExpand}
+          className="mt-4 w-full py-2 rounded-xl bg-gray-100/80 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-all flex items-center justify-center border border-gray-200/50 dark:border-gray-600/50"
+          title="Hide Details"
+        >
+          <svg className="w-5 h-5 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
+        </div>
+      )}
+    </div>
   )
 }
