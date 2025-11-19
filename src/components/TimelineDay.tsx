@@ -9,6 +9,7 @@ interface TimelineDayProps {
   habitColor?: string
   isBreakHabit: boolean
   isToday: boolean
+  isBeforeStart: boolean
   onStatusChange: (date: string) => void
   isLoading: boolean
 }
@@ -21,11 +22,12 @@ export const TimelineDay = memo(function TimelineDay({
   habitColor,
   isBreakHabit,
   isToday,
+  isBeforeStart,
   onStatusChange,
   isLoading,
 }: TimelineDayProps) {
   const handleClick = () => {
-    if (!isLoading) {
+    if (!isLoading && !isBeforeStart) {
       // Trigger haptic feedback on mobile devices
       if ('vibrate' in navigator) {
         navigator.vibrate(10) // Short 10ms vibration
@@ -76,9 +78,9 @@ export const TimelineDay = memo(function TimelineDay({
   return (
     <button
       onClick={handleClick}
-      disabled={isLoading}
+      disabled={isLoading || isBeforeStart}
       className="flex flex-col items-center justify-center transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group relative"
-      aria-label={`${dayName} ${dayNumber}, status: ${statusStyle.label}. Tap to change.`}
+      aria-label={`${dayName} ${dayNumber}, status: ${statusStyle.label}${isBeforeStart ? ' (before habit start)' : ''}. ${isBeforeStart ? 'Not available.' : 'Tap to change.'}`}
       aria-pressed={status === 'done'}
     >
       {/* Day name at top */}
@@ -99,10 +101,12 @@ export const TimelineDay = memo(function TimelineDay({
         )}
         <div
           className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm ${
-            isLoading ? 'opacity-30' : 'opacity-100'
+            isLoading ? 'opacity-30' : isBeforeStart ? 'opacity-30' : 'opacity-100'
           } ${
             habitColor && status === 'done' ? '' : statusStyle.bg
-          } group-hover:scale-110 group-active:scale-95 ${
+          } ${
+            isBeforeStart ? '' : 'group-hover:scale-110 group-active:scale-95'
+          } ${
             isToday ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-800' : ''
           }`}
           style={

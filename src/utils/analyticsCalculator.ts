@@ -91,9 +91,9 @@ export function calculateAnalyticsLocal(
   const completionRate = totalDays > 0 ? (completedDays / totalDays) * 100 : 0
 
   // Compute current streak:
-  // - Count consecutive 'done' days working backward from today
+  // - Count all adjacent 'done' days working backward from today
   // - 'not_done' breaks the streak (sets it to 0)
-  // - Missing/skipped days don't break the streak, but don't count either
+  // - Missing/skipped days are ignored (don't break streak, don't count)
   // - The streak includes today if today is 'done'
   let currentStreak = 0
   const todayKey = today.format('YYYY-MM-DD')
@@ -103,22 +103,23 @@ export function calculateAnalyticsLocal(
   if (todayCheck && todayCheck.status === 'not_done') {
     currentStreak = 0
   } else {
-    // Walk backward from today, counting consecutive done days
+    // Walk backward from today
+    // Count all 'done' days until we hit a 'not_done' (which breaks the streak)
+    // Skip over missing/skipped days without breaking
     let cursor = today.clone()
-    let streakBroken = false
     
-    while ((cursor.isAfter(startDate) || cursor.isSame(startDate, 'day')) && !streakBroken) {
+    while (cursor.isAfter(startDate) || cursor.isSame(startDate, 'day')) {
       const key = cursor.format('YYYY-MM-DD')
       const check = checkMap.get(key)
       
       if (check && check.status === 'not_done') {
-        // Explicit not_done breaks the streak
-        streakBroken = true
+        // Explicit not_done breaks the streak - stop counting
+        break
       } else if (check && (!check.status || check.status === 'done')) {
         // Count this done day
         currentStreak++
       }
-      // If no check (skipped), continue without breaking or counting
+      // If no check (skipped/missing), just continue to the next day
       
       cursor = cursor.subtract(1, 'day')
     }

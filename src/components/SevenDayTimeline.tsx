@@ -14,6 +14,7 @@ interface SevenDayTimelineProps {
 
 export const SevenDayTimeline = memo(function SevenDayTimeline({
   habitId,
+  habitStartDate,
   habitColor,
   isBreakHabit,
   frequency,
@@ -26,6 +27,9 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
     const today = dayjs()
     const dates = []
     
+    // Convert habit start date to dayjs
+    const habitStart = dayjs(habitStartDate.toDate())
+    
     // If frequency is an array of specific days, filter to show only those days
     const selectedDays = frequency === 'daily' ? null : frequency
     
@@ -36,6 +40,9 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
       const dayName = date.format('ddd') // e.g., 'Mon', 'Tue'
       const dayNameLower = date.format('dddd').toLowerCase() // e.g., 'monday', 'tuesday'
       
+      // Check if date is before habit start date
+      const isBeforeStart = date.isBefore(habitStart, 'day')
+      
       // If daily or if this day matches selected days, include it
       if (!selectedDays || selectedDays.includes(dayNameLower)) {
         dates.push({
@@ -43,13 +50,14 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
           dayName,
           dayNumber: date.date(),
           isToday: false, // None of these are today
+          isBeforeStart, // Mark if this date is before habit creation
         })
       }
       i++
     }
     
     return dates
-  }, [frequency])
+  }, [frequency, habitStartDate])
 
   // Fetch check-ins for the date range
   const startDateStr = dateRange[dateRange.length - 1]?.dateKey
@@ -87,6 +95,7 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
       return {
         ...date,
         status,
+        isBeforeStart: date.isBeforeStart, // Pass through the flag
       }
     })
   }, [checks, dateRange, optimisticUpdates])
@@ -94,6 +103,11 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
   const handleStatusChange = (date: string) => {
     const dateData = timelineDates.find(d => d.dateKey === date)
     if (!dateData) return
+
+    // Prevent check-in on dates before habit creation
+    if (dateData.isBeforeStart) {
+      return
+    }
 
     // Calculate next status
     const getNextStatus = (current: CheckInStatus): CheckInStatus => {
@@ -171,6 +185,7 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
                 habitColor={habitColor}
                 isBreakHabit={isBreakHabit}
                 isToday={date.isToday}
+                isBeforeStart={date.isBeforeStart || false}
                 onStatusChange={handleStatusChange}
                 isLoading={loadingDate === date.dateKey}
               />
