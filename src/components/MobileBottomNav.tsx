@@ -1,13 +1,28 @@
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 export function MobileBottomNav() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const isActive = (path: string) => location.pathname === path
 
+  // Only show on mobile devices
+  if (!isMobile) {
+    return null
+  }
+
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-700/50 z-50 safe-area-pb">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-700/50 z-50 safe-area-pb">
       <div className="flex justify-around items-center h-16 px-2">
         {/* Dashboard */}
         <button

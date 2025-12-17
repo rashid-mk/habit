@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { getUserFriendlyError, retryWithBackoff } from '../errorHandling'
+import { 
+  getUserFriendlyError, 
+  retryWithBackoff, 
+  createAnalyticsError, 
+  getAnalyticsError, 
+  retryAnalyticsOperation 
+} from '../errorHandling'
 import { FirebaseError } from 'firebase/app'
 
 describe('getUserFriendlyError', () => {
@@ -59,6 +65,106 @@ describe('getUserFriendlyError', () => {
 
     expect(result.message).toContain('unexpected error')
     expect(result.canRetry).toBe(true)
+  })
+})
+
+describe('createAnalyticsError', () => {
+  it('creates analytics error with correct properties', () => {
+    const error = createAnalyticsError('Test message', 'insufficient-data', false, 28)
+
+    expect(error.message).toBe('Test message')
+    expect(error.type).toBe('insufficient-data')
+    expect(error.canRetry).toBe(false)
+    expect(error.requiresMinimumData).toBe(28)
+  })
+
+  it('creates analytics error with default canRetry', () => {
+    const error = createAnalyticsError('Test message', 'calculation-error')
+
+    expect(error.canRetry).toBe(true)
+    expect(error.requiresMinimumData).toBeUndefined()
+  })
+})
+
+describe('getAnalyticsError', () => {
+  it('handles insufficient-data analytics error', () => {
+    const error = createAnalyticsError('Need more data', 'insufficient-data', false, 28)
+    const result = getAnalyticsError(error)
+
+    expect(result.message).toContain('Need at least 28 data points')
+    expect(result.canRetry).toBe(false)
+    expect(result.type).toBe('insufficient-data')
+  })
+
+  it('handles calculation-error analytics error', () => {
+    const error = createAnalyticsError('Calculation failed', 'calculation-error')
+    const result = getAnalyticsError(error)
+
+    expect(result.message).toContain('Unable to calculate analytics')
+    expect(result.canRetry).toBe(true)
+    expect(result.type).toBe('calculation-error')
+  })
+
+  it('handles permission-error analytics error', () => {
+    const error = createAnalyticsError('No permission', 'permission-error', false)
+    const result = getAnalyticsError(error)
+
+    expect(result.message).toContain('do not have permission')
+    expect(result.canRetry).toBe(false)
+    expect(result.type).toBe('permission-error')
+  })
+
+  it('falls back to general error handling for non-analytics errors', () => {
+    const error = new Error('General error')
+    const result = getAnalyticsError(error)
+
+    expect(result.message).toBe('General error')
+    expect(result.canRetry).toBe(true)
+  })
+})
+
+describe('retryAnalyticsOperation', () => {
+  it('succeeds on first attempt', async () => {
+    const operation = vi.fn().mockResolvedValue('success')
+    const result = await retryAnalyticsOperation(operation, 'test-operation', 2)
+
+    expect(result).toBe('success')
+    expect(operation).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries on retryable errors', async () => {
+    const error = createAnalyticsError('Network error', 'network-error', true)
+    const operation = vi.fn()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue('success')
+
+    const result = await retryAnalyticsOperation(operation, 'test-operation', 2)
+
+    expect(result).toBe('success')
+    expect(operation).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry insufficient-data errors', async () => {
+    const error = createAnalyticsError('Need more data', 'insufficient-data', false)
+    const operation = vi.fn().mockRejectedValue(error)
+
+    await expect(retryAnalyticsOperation(operation, 'test-operation', 2)).rejects.toThrow()
+    expect(operation).toHaveBeenCalledTimes(1)
+  })
+
+  it('logs errors for debugging', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = new Error('Test error')
+    const operation = vi.fn().mockRejectedValue(error)
+
+    await expect(retryAnalyticsOperation(operation, 'test-operation', 1)).rejects.toThrow()
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'Analytics operation "test-operation" failed (attempt 1):',
+      error
+    )
+
+    consoleSpy.mockRestore()
   })
 })
 

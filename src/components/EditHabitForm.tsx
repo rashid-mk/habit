@@ -16,8 +16,9 @@ export interface HabitFormData {
   habitType: 'build' | 'break'
   color?: string
   frequency: 'daily' | string[]
-  duration: number
   reminderTime?: string
+  endConditionType?: 'never' | 'on_date' | 'after_completions'
+  endConditionValue?: string | number
 }
 
 const WEEKDAYS = [
@@ -53,8 +54,9 @@ export function EditHabitForm({ habit, onSubmit, isLoading = false, error = null
   const [selectedDays, setSelectedDays] = useState<string[]>(
     Array.isArray(habit.frequency) ? habit.frequency : []
   )
-  const [duration, setDuration] = useState(habit.duration)
   const [reminderTime, setReminderTime] = useState(habit.reminderTime || '')
+  const [endConditionType, setEndConditionType] = useState<'never' | 'on_date' | 'after_completions'>(habit.endConditionType || 'never')
+  const [endConditionValue, setEndConditionValue] = useState<string | number>(habit.endConditionValue || '')
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
 
   const validateForm = (): boolean => {
@@ -91,8 +93,9 @@ export function EditHabitForm({ habit, onSubmit, isLoading = false, error = null
       habitType,
       color,
       frequency,
-      duration,
       reminderTime: reminderTime || undefined,
+      endConditionType: endConditionType !== 'never' ? endConditionType : undefined,
+      endConditionValue: endConditionType !== 'never' && endConditionValue ? endConditionValue : undefined,
     }
 
     await onSubmit(habitData)
@@ -239,37 +242,72 @@ export function EditHabitForm({ habit, onSubmit, isLoading = false, error = null
         )}
       </div>
 
-      {/* Duration & Reminder */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label htmlFor="duration" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
-            Duration (days)
-          </label>
-          <input
-            type="number"
-            id="duration"
-            value={duration}
-            onChange={(e) => setDuration(Number(e.target.value))}
-            min="1"
-            max="365"
-            className="block w-full rounded-xl border-0 bg-white/80 dark:bg-gray-700/80 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          />
-        </div>
+      {/* End Condition */}
+      <div>
+        <label htmlFor="endConditionType" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
+          End Condition
+        </label>
+        <select
+          id="endConditionType"
+          value={endConditionType}
+          onChange={(e) => {
+            setEndConditionType(e.target.value as 'never' | 'on_date' | 'after_completions')
+            setEndConditionValue('')
+          }}
+          className="block w-full rounded-xl border-0 bg-white/80 dark:bg-gray-700/80 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+          disabled={isLoading}
+        >
+          <option value="never">Never</option>
+          <option value="on_date">On a Date</option>
+          <option value="after_completions">After Total Completions</option>
+        </select>
+        
+        {endConditionType === 'on_date' && (
+          <div className="mt-3">
+            <input
+              type="date"
+              value={endConditionValue as string}
+              onChange={(e) => setEndConditionValue(e.target.value)}
+              className="block w-full rounded-xl border-0 bg-white/80 dark:bg-gray-700/80 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
+            />
+          </div>
+        )}
+        
+        {endConditionType === 'after_completions' && (
+          <div className="mt-3">
+            <div className="relative">
+              <input
+                type="number"
+                value={endConditionValue as number}
+                onChange={(e) => setEndConditionValue(Number(e.target.value))}
+                min="1"
+                max="1000"
+                placeholder="Number of completions"
+                className="block w-full rounded-xl border-0 bg-white/80 dark:bg-gray-700/80 px-4 py-3 pr-32 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                disabled={isLoading}
+              />
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">completions</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
-        <div>
-          <label htmlFor="reminderTime" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
-            Reminder Time
-          </label>
-          <input
-            type="time"
-            id="reminderTime"
-            value={reminderTime}
-            onChange={(e) => setReminderTime(e.target.value)}
-            className="block w-full rounded-xl border-0 bg-white/80 dark:bg-gray-700/80 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          />
-        </div>
+      {/* Reminder Time */}
+      <div>
+        <label htmlFor="reminderTime" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
+          Reminder Time <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
+        </label>
+        <input
+          type="time"
+          id="reminderTime"
+          value={reminderTime}
+          onChange={(e) => setReminderTime(e.target.value)}
+          className="block w-full rounded-xl border-0 bg-white/80 dark:bg-gray-700/80 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+          disabled={isLoading}
+        />
       </div>
 
       {error && (

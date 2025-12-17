@@ -19,7 +19,6 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
   isBreakHabit,
   frequency,
 }: SevenDayTimelineProps) {
-  const [loadingDate, setLoadingDate] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, CheckInStatus>>(new Map())
   
   // Calculate previous 7 days (not including today)
@@ -126,29 +125,29 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
       return newMap
     })
 
-    // Then do the async operation
-    setLoadingDate(date)
+    // Then do the async operation in the background (no loading state)
     toggleMutation.mutateAsync({
       habitId,
       date,
       currentStatus,
     }).then(() => {
-      // Clear optimistic update after server confirms
-      setOptimisticUpdates(prev => {
-        const newMap = new Map(prev)
-        newMap.delete(date)
-        return newMap
-      })
+      // Keep optimistic update for a bit longer to avoid glitch
+      // The query will refetch and the optimistic update will be overridden by real data
+      setTimeout(() => {
+        setOptimisticUpdates(prev => {
+          const newMap = new Map(prev)
+          newMap.delete(date)
+          return newMap
+        })
+      }, 500) // Small delay to ensure cache is updated
     }).catch((error) => {
       console.error('Failed to toggle status:', error)
-      // Rollback optimistic update on error
+      // Rollback optimistic update immediately on error
       setOptimisticUpdates(prev => {
         const newMap = new Map(prev)
         newMap.delete(date)
         return newMap
       })
-    }).finally(() => {
-      setLoadingDate(null)
     })
   }
 
@@ -187,7 +186,7 @@ export const SevenDayTimeline = memo(function SevenDayTimeline({
                 isToday={date.isToday}
                 isBeforeStart={date.isBeforeStart || false}
                 onStatusChange={handleStatusChange}
-                isLoading={loadingDate === date.dateKey}
+                isLoading={false}
               />
             ))}
           </div>

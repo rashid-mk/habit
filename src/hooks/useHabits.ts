@@ -10,13 +10,18 @@ export interface Habit {
   id: string
   habitName: string
   habitType?: 'build' | 'break'
+  trackingType?: 'simple' | 'count' | 'time' // NEW - defaults to 'simple' for backward compatibility
+  targetValue?: number // NEW - for count (number) or time (minutes)
+  targetUnit?: 'times' | 'minutes' | 'hours' // NEW - display unit
   color?: string
   frequency: 'daily' | string[]
-  duration: number
   reminderTime?: string
+  goal?: number // times per day (default 1)
   startDate: Timestamp
   createdAt: Timestamp
   isActive: boolean
+  endConditionType?: 'never' | 'on_date' | 'after_completions'
+  endConditionValue?: string | number
 }
 
 export interface Analytics {
@@ -41,16 +46,45 @@ export function useCreateHabit() {
       try {
         // Create habit document
         const habitsRef = collection(db, 'users', user.uid, 'habits')
+        
+        // Handle custom start date
+        let startDateValue
+        if (habitData.customStartDate) {
+          // Convert YYYY-MM-DD string to Timestamp
+          const customDate = new Date(habitData.customStartDate + 'T00:00:00')
+          startDateValue = Timestamp.fromDate(customDate)
+        } else {
+          startDateValue = serverTimestamp()
+        }
+        
+        // Validate tracking type fields
+        const trackingType = habitData.trackingType || 'simple'
+        if ((trackingType === 'count' || trackingType === 'time') && habitData.targetValue) {
+          if (habitData.targetValue < 1 || habitData.targetValue > 999) {
+            throw new Error('Target value must be between 1 and 999')
+          }
+        }
+
+        // Convert hours to minutes for storage if needed
+        let targetValueInMinutes = habitData.targetValue
+        if (trackingType === 'time' && habitData.targetUnit === 'hours' && habitData.targetValue) {
+          targetValueInMinutes = habitData.targetValue * 60
+        }
+
         const habitDoc = await addDoc(habitsRef, {
           habitName: habitData.habitName,
-          habitType: habitData.habitType, // Add habitType field
-          color: habitData.color || null, // Add color field
+          habitType: habitData.habitType,
+          trackingType: trackingType,
+          targetValue: (trackingType === 'count' || trackingType === 'time') ? targetValueInMinutes : null,
+          targetUnit: habitData.targetUnit || null,
+          color: habitData.color || null,
           frequency: habitData.frequency,
-          duration: habitData.duration,
           reminderTime: habitData.reminderTime || null,
-          startDate: serverTimestamp(),
+          startDate: startDateValue,
           createdAt: serverTimestamp(),
           isActive: true,
+          endConditionType: habitData.endConditionType || null,
+          endConditionValue: habitData.endConditionValue || null,
         })
 
         // Initialize analytics document with zero values
@@ -209,6 +243,11 @@ export interface CheckIn {
   completedAt: Timestamp
   habitId: string
   status?: 'done' | 'not_done' // Optional for backward compatibility
+  completionCount?: number // Number of times completed (for multi-goal habits)
+  goal?: number // Target completions for the day
+  timestamps?: Timestamp[] // Array of completion timestamps
+  progressValue?: number // NEW - current count or minutes logged
+  isCompleted?: boolean // NEW - whether target was reached
 }
 
 export interface UseHabitChecksOptions {
@@ -302,7 +341,7 @@ export function useCheckIn() {
           const checks = checksSnapshot.docs.map(d => d.data() as any)
           
           // Calculate analytics locally
-          const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate)
+          const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate, habit.frequency)
           
           // Save calculated analytics to database
           const analyticsRef = doc(db, 'users', user.uid, 'habits', habitId, 'analytics', 'summary')
@@ -345,7 +384,7 @@ export function useCheckIn() {
         ]
         
         // Calculate new analytics instantly from cached data (no async!)
-        const newAnalytics = calculateAnalyticsLocal(optimisticChecks, cachedHabit.startDate)
+        const newAnalytics = calculateAnalyticsLocal(optimisticChecks, cachedHabit.startDate, cachedHabit.frequency)
         
         // Update cache immediately for instant UI update
         queryClient.setQueryData(['analytics', user?.uid, variables.habitId], newAnalytics)
@@ -412,7 +451,7 @@ export function useUndoCheckIn() {
           const checks = checksSnapshot.docs.map(d => d.data() as any)
           
           // Calculate analytics locally
-          const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate)
+          const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate, habit.frequency)
           
           // Save calculated analytics to database
           const analyticsRef = doc(db, 'users', user.uid, 'habits', habitId, 'analytics', 'summary')
@@ -646,6 +685,116 @@ export function useToggleCheckIn() {
     },
     onSuccess: (_, variables) => {
       // Invalidate to ensure we're in sync with server
+      queryClient.invalidateQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
+      queryClient.invalidateQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
+    },
+    retry: 2,
+    retryDelay: 1000,
+  })
+}
+
+
+
+// Hook for updating progress on count/time habits
+export function useUpdateProgress() {
+  const { user } = useAuthState()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ habitId, date, progressValue }: { habitId: string; date: string; progressValue: number }) => {
+      if (!user) {
+        throw new Error('User must be authenticated to update progress')
+      }
+
+      const dateKey = dayjs(date).format('YYYY-MM-DD')
+
+      try {
+        // Get habit to check target value
+        const habitDoc = await getDoc(doc(db, 'users', user.uid, 'habits', habitId))
+        if (!habitDoc.exists()) {
+          throw new Error('Habit not found')
+        }
+
+        const habit = habitDoc.data() as Habit
+        const targetValue = habit.targetValue || 1
+        const isCompleted = progressValue >= targetValue
+
+        // Write or update check document with progress
+        const checkRef = doc(db, 'users', user.uid, 'habits', habitId, 'checks', dateKey)
+        await setDoc(checkRef, {
+          dateKey,
+          completedAt: serverTimestamp(),
+          habitId,
+          status: isCompleted ? 'done' : 'not_done',
+          progressValue,
+          isCompleted,
+        })
+
+        // Calculate and save analytics
+        const checksRef = collection(db, 'users', user.uid, 'habits', habitId, 'checks')
+        const checksSnapshot = await getDocs(checksRef)
+        const checks = checksSnapshot.docs.map(d => d.data() as any)
+        
+        const newAnalytics = calculateAnalyticsLocal(checks, habit.startDate, habit.frequency)
+        
+        const analyticsRef = doc(db, 'users', user.uid, 'habits', habitId, 'analytics', 'summary')
+        await setDoc(analyticsRef, newAnalytics, { merge: true })
+
+        return { dateKey, progressValue, isCompleted }
+      } catch (error: any) {
+        if (error.code === 'permission-denied') {
+          throw new Error('You do not have permission to update progress')
+        } else if (error.code === 'unavailable') {
+          throw new Error('Connection lost. Changes will sync when online')
+        } else {
+          throw new Error('Failed to update progress. Please try again')
+        }
+      }
+    },
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
+      await queryClient.cancelQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
+
+      const previousAnalytics = queryClient.getQueryData(['analytics', user?.uid, variables.habitId])
+      const previousChecks = queryClient.getQueryData(['checks', user?.uid, variables.habitId])
+
+      const cachedHabit = queryClient.getQueryData(['habit', user?.uid, variables.habitId]) as Habit | undefined
+      
+      if (cachedHabit) {
+        const cachedChecks = (queryClient.getQueryData(['checks', user?.uid, variables.habitId]) as CheckIn[] | undefined) || []
+        const dateKey = dayjs(variables.date).format('YYYY-MM-DD')
+        const targetValue = cachedHabit.targetValue || 1
+        const isCompleted = variables.progressValue >= targetValue
+        
+        const optimisticChecks = [
+          ...cachedChecks.filter(c => c.dateKey !== dateKey),
+          { 
+            dateKey, 
+            completedAt: Timestamp.now(), 
+            habitId: variables.habitId, 
+            status: isCompleted ? 'done' as const : 'not_done' as const,
+            progressValue: variables.progressValue,
+            isCompleted
+          }
+        ]
+        
+        const newAnalytics = calculateAnalyticsLocal(optimisticChecks, cachedHabit.startDate, cachedHabit.frequency)
+        
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], newAnalytics)
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], optimisticChecks)
+      }
+
+      return { previousAnalytics, previousChecks }
+    },
+    onError: (_err, variables, context) => {
+      if (context?.previousAnalytics) {
+        queryClient.setQueryData(['analytics', user?.uid, variables.habitId], context.previousAnalytics)
+      }
+      if (context?.previousChecks) {
+        queryClient.setQueryData(['checks', user?.uid, variables.habitId], context.previousChecks)
+      }
+    },
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['analytics', user?.uid, variables.habitId] })
       queryClient.invalidateQueries({ queryKey: ['checks', user?.uid, variables.habitId] })
     },

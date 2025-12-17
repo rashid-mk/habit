@@ -7,11 +7,28 @@ service cloud.firestore {
       
       // Habits subcollection
       match /habits/{habitId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow create: if request.auth != null && request.auth.uid == uid
+          && request.resource.data.habitName is string
+          && request.resource.data.habitName.size() >= 1
+          && request.resource.data.habitName.size() <= 100
+          && request.resource.data.isActive == true
+          && (!('trackingType' in request.resource.data) || request.resource.data.trackingType in ['simple', 'count', 'time'])
+          && (!('targetValue' in request.resource.data) || (request.resource.data.targetValue is number && request.resource.data.targetValue >= 1 && request.resource.data.targetValue <= 999));
+        allow update: if request.auth != null && request.auth.uid == uid
+          && (!('habitName' in request.resource.data) || (request.resource.data.habitName is string && request.resource.data.habitName.size() >= 1 && request.resource.data.habitName.size() <= 100))
+          && (!('trackingType' in request.resource.data) || request.resource.data.trackingType in ['simple', 'count', 'time'])
+          && (!('targetValue' in request.resource.data) || (request.resource.data.targetValue is number && request.resource.data.targetValue >= 1 && request.resource.data.targetValue <= 999));
+        allow delete: if request.auth != null && request.auth.uid == uid;
         
         // Checks subcollection
         match /checks/{dateKey} {
-          allow read, write: if request.auth != null && request.auth.uid == uid;
+          allow read: if request.auth != null && request.auth.uid == uid;
+          allow write: if request.auth != null && request.auth.uid == uid
+            && request.resource.data.dateKey is string
+            && request.resource.data.habitId is string
+            && (!('progressValue' in request.resource.data) || (request.resource.data.progressValue is number && request.resource.data.progressValue >= 0))
+            && (!('status' in request.resource.data) || request.resource.data.status in ['done', 'not_done']);
         }
         
         // Analytics subcollection - allow client-side writes

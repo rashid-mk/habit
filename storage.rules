@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Cloud Storage Security Rules
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Export files - only accessible by the user who created them
+    match /exports/{userId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // Only Cloud Functions can write export files
+      allow delete: if false; // Only Cloud Functions can delete export files
+    }
+    
+    // Default rule - deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -8,10 +8,15 @@ interface UpdateHabitParams {
   updates: {
     habitName?: string
     habitType?: 'build' | 'break'
+    trackingType?: 'simple' | 'count' | 'time'
+    targetValue?: number
+    targetUnit?: 'times' | 'minutes' | 'hours'
     color?: string
     frequency?: 'daily' | string[]
-    duration?: number
     reminderTime?: string
+    goal?: number
+    endConditionType?: 'never' | 'on_date' | 'after_completions'
+    endConditionValue?: string | number
   }
 }
 
@@ -26,9 +31,22 @@ export function useUpdateHabit() {
       }
 
       try {
+        // Validate tracking type fields if being updated
+        if (updates.trackingType && (updates.trackingType === 'count' || updates.trackingType === 'time')) {
+          if (updates.targetValue && (updates.targetValue < 1 || updates.targetValue > 999)) {
+            throw new Error('Target value must be between 1 and 999')
+          }
+        }
+
+        // Convert hours to minutes for storage if needed
+        let processedUpdates = { ...updates }
+        if (updates.trackingType === 'time' && updates.targetUnit === 'hours' && updates.targetValue) {
+          processedUpdates.targetValue = updates.targetValue * 60
+        }
+
         // Filter out undefined values
         const cleanUpdates = Object.fromEntries(
-          Object.entries(updates).filter(([_, value]) => value !== undefined)
+          Object.entries(processedUpdates).filter(([_, value]) => value !== undefined)
         )
 
         const habitRef = doc(db, 'users', user.uid, 'habits', habitId)

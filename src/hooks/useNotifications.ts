@@ -13,9 +13,13 @@ export function useNotifications() {
     if ('Notification' in window) {
       setPermission(Notification.permission);
       
-      // Show educational prompt if permission not granted
-      if (Notification.permission === 'default' && user) {
+      // Check if user has previously dismissed the prompt
+      const hasPromptBeenShown = localStorage.getItem('notificationPromptShown');
+      
+      // Show educational prompt if permission not granted and hasn't been shown before
+      if (Notification.permission === 'default' && user && !hasPromptBeenShown) {
         setShowPrompt(true);
+        localStorage.setItem('notificationPromptShown', 'true');
       }
     }
   }, [user]);

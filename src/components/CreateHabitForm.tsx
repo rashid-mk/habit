@@ -2,20 +2,28 @@
 import { useState, FormEvent, useRef, useEffect } from 'react'
 import { ErrorMessage } from './ErrorMessage'
 import { getHabitSuggestions, isBreakHabit } from '../data/habitSuggestions'
+import { TrackingTypeSelector } from './TrackingTypeSelector'
+import { TargetValueInput } from './TargetValueInput'
 
 interface CreateHabitFormProps {
   onSubmit: (habitData: HabitFormData) => Promise<void>
   isLoading?: boolean
   error?: unknown | null
+  initialHabitType?: 'build' | 'break'
 }
 
 export interface HabitFormData {
   habitName: string
   habitType: 'build' | 'break'
+  trackingType?: 'simple' | 'count' | 'time' // NEW - tracking method
+  targetValue?: number // NEW - target for count/time habits
+  targetUnit?: 'times' | 'minutes' | 'hours' // NEW - unit for display
   color?: string
   frequency: 'daily' | string[]
-  duration: number
   reminderTime?: string
+  customStartDate?: string // YYYY-MM-DD format
+  endConditionType?: 'never' | 'on_date' | 'after_completions'
+  endConditionValue?: string | number // date string or number of completions
 }
 
 const WEEKDAYS = [
@@ -41,14 +49,19 @@ const HABIT_COLORS = [
   { name: 'Indigo', value: '#6366f1', gradient: 'from-indigo-500 to-indigo-600' },
 ]
 
-export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: CreateHabitFormProps) {
+export function CreateHabitForm({ onSubmit, isLoading = false, error = null, initialHabitType }: CreateHabitFormProps) {
   const [habitName, setHabitName] = useState('')
-  const [habitType, setHabitType] = useState<'build' | 'break'>('build')
+  const [habitType, setHabitType] = useState<'build' | 'break'>(initialHabitType || 'build')
+  const [trackingType, setTrackingType] = useState<'simple' | 'count' | 'time'>('simple')
+  const [targetValue, setTargetValue] = useState(1)
+  const [targetUnit, setTargetUnit] = useState<'times' | 'minutes' | 'hours'>('times')
   const [color, setColor] = useState(HABIT_COLORS[0].value)
   const [frequencyType, setFrequencyType] = useState<'daily' | 'specific'>('daily')
   const [selectedDays, setSelectedDays] = useState<string[]>([])
-  const [duration, setDuration] = useState(30)
   const [reminderTime, setReminderTime] = useState('')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [endConditionType, setEndConditionType] = useState<'never' | 'on_date' | 'after_completions'>('never')
+  const [endConditionValue, setEndConditionValue] = useState<string | number>('')
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -77,6 +90,13 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
       errors.habitName = 'Habit name must be between 1 and 100 characters'
     }
 
+    // Validate tracking type target value
+    if (trackingType === 'count' || trackingType === 'time') {
+      if (!targetValue || targetValue < 1 || targetValue > 999) {
+        errors.targetValue = 'Target value must be between 1 and 999'
+      }
+    }
+
     // Validate frequency
     if (frequencyType === 'specific' && selectedDays.length === 0) {
       errors.frequency = 'Please select at least one day'
@@ -102,10 +122,15 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
     const habitData: HabitFormData = {
       habitName: habitName.trim(),
       habitType,
+      trackingType,
+      targetValue: (trackingType === 'count' || trackingType === 'time') ? targetValue : undefined,
+      targetUnit: (trackingType === 'count' || trackingType === 'time') ? targetUnit : undefined,
       color,
       frequency,
-      duration,
       reminderTime: reminderTime || undefined,
+      customStartDate: customStartDate || undefined,
+      endConditionType: endConditionType !== 'never' ? endConditionType : undefined,
+      endConditionValue: endConditionType !== 'never' && endConditionValue ? endConditionValue : undefined,
     }
 
     await onSubmit(habitData)
@@ -225,7 +250,8 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
         )}
       </div>
 
-      {/* Habit Type */}
+      {/* Habit Type - Only show if not pre-selected */}
+      {!initialHabitType && (
       <div>
         <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
           What type of habit is this? *
@@ -286,6 +312,35 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
           </button>
         </div>
       </div>
+      )}
+
+      {/* Tracking Type Selector */}
+      <TrackingTypeSelector
+        selectedType={trackingType}
+        onTypeChange={(type) => {
+          setTrackingType(type)
+          // Reset target unit when changing tracking type
+          if (type === 'count') {
+            setTargetUnit('times')
+          } else if (type === 'time') {
+            setTargetUnit('minutes')
+          }
+        }}
+        disabled={isLoading}
+      />
+
+      {/* Target Value Input - Show only for count and time tracking */}
+      {(trackingType === 'count' || trackingType === 'time') && (
+        <TargetValueInput
+          trackingType={trackingType}
+          value={targetValue}
+          unit={targetUnit}
+          onValueChange={setTargetValue}
+          onUnitChange={setTargetUnit}
+          disabled={isLoading}
+          error={validationErrors.targetValue}
+        />
+      )}
 
       {/* Color Picker */}
       <div>
@@ -397,76 +452,138 @@ export function CreateHabitForm({ onSubmit, isLoading = false, error = null }: C
         </div>
       )}
 
-      {/* Duration & Reminder Time - Side by Side */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Duration */}
-        <div>
-          <label htmlFor="duration" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
-            Duration Goal
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-            </div>
-            <input
-              type="number"
-              id="duration"
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              min="1"
-              max="365"
-              className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl pl-12 pr-16 py-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
-              disabled={isLoading}
-            />
-            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">days</span>
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center">
-            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+      {/* Start Date */}
+      <div>
+        <label htmlFor="customStartDate" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
+          Start Date <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Recommended: 21-66 days to form a habit
-          </p>
+          </div>
+          <input
+            type="date"
+            id="customStartDate"
+            value={customStartDate}
+            onChange={(e) => setCustomStartDate(e.target.value)}
+            className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl pl-12 pr-4 py-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
+            disabled={isLoading}
+          />
         </div>
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center">
+          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+          Leave empty to start today
+        </p>
+      </div>
 
-        {/* Reminder Time */}
-        <div>
-          <label htmlFor="reminderTime" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
-            Daily Reminder <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </div>
+      {/* End Condition */}
+      <div>
+        <label htmlFor="endConditionType" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
+          End Condition
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <select
+            id="endConditionType"
+            value={endConditionType}
+            onChange={(e) => {
+              setEndConditionType(e.target.value as 'never' | 'on_date' | 'after_completions')
+              setEndConditionValue('')
+            }}
+            className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl pl-12 pr-4 py-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
+            disabled={isLoading}
+          >
+            <option value="never">Never</option>
+            <option value="on_date">On a Date</option>
+            <option value="after_completions">After Total Completions</option>
+          </select>
+        </div>
+        
+        {/* Conditional input based on end condition type */}
+        {endConditionType === 'on_date' && (
+          <div className="mt-4">
             <input
-              type="time"
-              id="reminderTime"
-              value={reminderTime}
-              onChange={(e) => setReminderTime(e.target.value)}
-              className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl pl-12 pr-4 py-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
+              type="date"
+              value={endConditionValue as string}
+              onChange={(e) => setEndConditionValue(e.target.value)}
+              className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all shadow-lg"
               disabled={isLoading}
             />
           </div>
-          {validationErrors.reminderTime && (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              {validationErrors.reminderTime}
-            </p>
-          )}
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center">
-            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+        )}
+        
+        {endConditionType === 'after_completions' && (
+          <div className="mt-4">
+            <div className="relative">
+              <input
+                type="number"
+                value={endConditionValue as number}
+                onChange={(e) => setEndConditionValue(Number(e.target.value))}
+                min="1"
+                max="1000"
+                placeholder="Number of completions"
+                className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl px-4 py-3 pr-32 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all shadow-lg"
+                disabled={isLoading}
+              />
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">completions</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center">
+          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+          {endConditionType === 'never' && 'Habit continues indefinitely'}
+          {endConditionType === 'on_date' && 'Habit ends on the selected date'}
+          {endConditionType === 'after_completions' && 'Habit ends after reaching the target'}
+        </p>
+      </div>
+
+      {/* Reminder Time */}
+      <div>
+        <label htmlFor="reminderTime" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
+          Daily Reminder <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            Get notified to stay on track
-          </p>
+          </div>
+          <input
+            type="time"
+            id="reminderTime"
+            value={reminderTime}
+            onChange={(e) => setReminderTime(e.target.value)}
+            className="block w-full rounded-2xl border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl pl-12 pr-4 py-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white/80 dark:focus:bg-gray-800/80 transition-all shadow-lg shadow-gray-200/50 dark:shadow-gray-900/50"
+            disabled={isLoading}
+          />
         </div>
+        {validationErrors.reminderTime && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center">
+            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            {validationErrors.reminderTime}
+          </p>
+        )}
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center">
+          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+          Get notified to stay on track
+        </p>
       </div>
 
       {/* Error Message */}

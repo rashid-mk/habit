@@ -1,10 +1,12 @@
 import { Navigation } from '../components/Navigation'
 import { useTheme } from '../contexts/ThemeContext'
 import { useViewSettings } from '../contexts/ViewSettingsContext'
+import { useDateRestriction } from '../contexts/DateRestrictionContext'
 
 export function SettingsPage() {
   const { theme, toggleTheme } = useTheme()
   const { viewType, setViewType } = useViewSettings()
+  const { dateRestrictionEnabled, toggleDateRestriction } = useDateRestriction()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -141,6 +143,49 @@ export function SettingsPage() {
                   </div>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Data Entry Section */}
+        <div className="backdrop-blur-xl bg-white/50 dark:bg-gray-800/50 rounded-3xl border border-white/20 dark:border-gray-700/20 p-6 shadow-xl">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <svg className="w-6 h-6 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Data Entry
+          </h2>
+
+          {/* Date Restriction Toggle */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-gray-50/50 dark:bg-gray-700/50">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Restrict Date Editing</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {dateRestrictionEnabled 
+                      ? 'Only yesterday, today, and tomorrow can be edited'
+                      : 'All dates can be edited (past and future)'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={toggleDateRestriction}
+                className={`relative w-16 h-8 rounded-full transition-colors ${
+                  dateRestrictionEnabled ? 'bg-green-600' : 'bg-gray-300'
+                }`}
+              >
+                <div
+                  className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transform transition-transform ${
+                    dateRestrictionEnabled ? 'translate-x-8' : 'translate-x-0'
+                  }`}
+                />
+              </button>
             </div>
           </div>
         </div>

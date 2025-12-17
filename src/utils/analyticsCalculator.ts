@@ -14,6 +14,8 @@ export interface CheckIn {
   completedAt: Timestamp
   habitId?: string
   status?: 'done' | 'not_done' // Optional for backward compatibility
+  progressValue?: number // For count/time habits
+  isCompleted?: boolean // Whether target was reached
 }
 
 export interface Analytics {
@@ -41,9 +43,14 @@ function reduceChecksToSinglePerDay(checks: CheckIn[]) {
       continue
     }
 
-    // If either is not_done, keep not_done (it breaks streak)
+    // If either is not_done, set not_done but prefer the latest completedAt if any
     if (existing.status === 'not_done' || c.status === 'not_done') {
-      map.set(c.dateKey, { ...existing, status: 'not_done' })
+      map.set(c.dateKey, {
+        dateKey: c.dateKey,
+        completedAt: (c.completedAt && (!existing.completedAt || (c.completedAt as Timestamp).toMillis() > (existing.completedAt as Timestamp).toMillis())) ? c.completedAt : existing.completedAt,
+        habitId: c.habitId || existing.habitId,
+        status: 'not_done' as 'not_done',
+      })
       continue
     }
 
@@ -60,13 +67,27 @@ function reduceChecksToSinglePerDay(checks: CheckIn[]) {
   return map // Map<dateKey, CheckIn>
 }
 
+
 /**
  * Calculate analytics from checks array (no Firestore fetch - instant!)
  * Use this for optimistic updates in the UI
+ * @param checks - Array of check-in records
+ * @param habitStartDate - When the habit started
+ * @param habitFrequency - Frequency of the habit (daily or specific days)
  */
 export function calculateAnalyticsLocal(
   checks: CheckIn[],
   habitStartDate: Timestamp
+): Analytics
+export function calculateAnalyticsLocal(
+  checks: CheckIn[],
+  habitStartDate: Timestamp,
+  habitFrequency?: 'daily' | string[]
+): Analytics
+export function calculateAnalyticsLocal(
+  checks: CheckIn[],
+  habitStartDate: Timestamp,
+  habitFrequency: 'daily' | string[] = 'daily'
 ): Analytics {
   if (!habitStartDate) {
     throw new Error('habitStartDate is required')
@@ -83,63 +104,108 @@ export function calculateAnalyticsLocal(
   const totalDays = startDate.isAfter(today) ? 0 : today.diff(startDate, 'day') + 1
 
   // Completed days: count of entries in checkMap whose status is done (or no status)
+  // For count/time habits, use isCompleted field if available
   let completedDays = 0
   for (const [, c] of checkMap) {
-    if (!c.status || c.status === 'done') completedDays++
+    // If isCompleted is explicitly set, use that (for count/time habits)
+    if (c.isCompleted !== undefined) {
+      if (c.isCompleted) completedDays++
+    } else {
+      // Fall back to status check for simple habits and backward compatibility
+      if (!c.status || c.status === 'done') completedDays++
+    }
   }
 
   const completionRate = totalDays > 0 ? (completedDays / totalDays) * 100 : 0
 
+  // Helper function to check if a day is active based on habit frequency
+  const isActiveDayForHabit = (date: dayjs.Dayjs): boolean => {
+    if (!habitFrequency || habitFrequency === 'daily') return true
+    const dayName = date.format('dddd').toLowerCase()
+    return habitFrequency.includes(dayName)
+  }
+
   // Compute current streak:
   // - Count all adjacent 'done' days working backward from today
-  // - 'not_done' breaks the streak (sets it to 0)
-  // - Missing/skipped days are ignored (don't break streak, don't count)
+  // - 'not_done' on an active day breaks the streak (sets it to 0)
+  // - Missing/skipped days on active days break the streak
+  // - Inactive days (not in frequency) are ignored completely
   // - The streak includes today if today is 'done'
   let currentStreak = 0
   const todayKey = today.format('YYYY-MM-DD')
   const todayCheck = checkMap.get(todayKey)
+  const isTodayActive = isActiveDayForHabit(today)
   
-  // If today is explicitly marked as not_done, streak is 0
-  if (todayCheck && todayCheck.status === 'not_done') {
+  // If today is an active day and explicitly marked as not_done, streak is 0
+  if (isTodayActive && todayCheck && todayCheck.status === 'not_done') {
     currentStreak = 0
   } else {
     // Walk backward from today
-    // Count all 'done' days until we hit a 'not_done' (which breaks the streak)
-    // Skip over missing/skipped days without breaking
+    // Count all 'done' days on active days until we hit a 'not_done' or missing check on an active day
     let cursor = today.clone()
+    let streakBroken = false
     
-    while (cursor.isAfter(startDate) || cursor.isSame(startDate, 'day')) {
+    while ((cursor.isAfter(startDate) || cursor.isSame(startDate, 'day')) && !streakBroken) {
       const key = cursor.format('YYYY-MM-DD')
       const check = checkMap.get(key)
+      const isActiveDay = isActiveDayForHabit(cursor)
       
-      if (check && check.status === 'not_done') {
-        // Explicit not_done breaks the streak - stop counting
-        break
-      } else if (check && (!check.status || check.status === 'done')) {
+      if (!isActiveDay) {
+        // Skip inactive days - they don't affect the streak
+        cursor = cursor.subtract(1, 'day')
+        continue
+      }
+      
+      // This is an active day
+      // For count/time habits, check isCompleted field
+      const isDone = check?.isCompleted !== undefined 
+        ? check.isCompleted 
+        : (check && (!check.status || check.status === 'done'))
+      
+      if (check && check.status === 'not_done' && !isDone) {
+        // Explicit not_done on active day breaks the streak
+        streakBroken = true
+      } else if (isDone) {
         // Count this done day
         currentStreak++
+      } else {
+        // No check on an active day - breaks the streak
+        streakBroken = true
       }
-      // If no check (skipped/missing), just continue to the next day
       
       cursor = cursor.subtract(1, 'day')
     }
   }
 
-  // Compute longest streak (only 'not_done' breaks; missing days are ignored)
+  // Compute longest streak (only 'not_done' or missing check on active days breaks)
   let longestStreak = 0
   let running = 0
   let cursorDate = startDate.clone()
   while (cursorDate.isBefore(today) || cursorDate.isSame(today, 'day')) {
     const key = cursorDate.format('YYYY-MM-DD')
     const check = checkMap.get(key)
+    const isActiveDay = isActiveDayForHabit(cursorDate)
 
-    if (check && (!check.status || check.status === 'done')) {
+    if (!isActiveDay) {
+      // Skip inactive days - they don't affect the streak
+      cursorDate = cursorDate.add(1, 'day')
+      continue
+    }
+
+    // This is an active day
+    // For count/time habits, check isCompleted field
+    const isDone = check?.isCompleted !== undefined 
+      ? check.isCompleted 
+      : (check && (!check.status || check.status === 'done'))
+    
+    if (isDone) {
       running++
-    } else if (check && check.status === 'not_done') {
+    } else {
+      // Either not_done or missing check on active day - breaks streak
       longestStreak = Math.max(longestStreak, running)
       running = 0
     }
-    // if no check -> skip (doesn't increment or break)
+    
     cursorDate = cursorDate.add(1, 'day')
   }
   longestStreak = Math.max(longestStreak, running)

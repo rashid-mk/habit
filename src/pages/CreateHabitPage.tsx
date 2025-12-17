@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { CreateHabitForm, HabitFormData } from '../components/CreateHabitForm'
 import { SuccessMessage } from '../components/SuccessMessage'
 import { Navigation } from '../components/Navigation'
@@ -7,8 +7,12 @@ import { useCreateHabit } from '../hooks/useHabits'
 
 export function CreateHabitPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const createHabit = useCreateHabit()
   const [showSuccess, setShowSuccess] = useState(false)
+  
+  // Get habit type from navigation state
+  const initialHabitType = (location.state as { habitType?: 'build' | 'break' })?.habitType
 
   const handleSubmit = async (habitData: HabitFormData) => {
     await createHabit.mutateAsync(habitData)
@@ -44,6 +48,7 @@ export function CreateHabitPage() {
             onSubmit={handleSubmit}
             isLoading={createHabit.isPending}
             error={createHabit.error}
+            initialHabitType={initialHabitType}
           />
         </div>
 
