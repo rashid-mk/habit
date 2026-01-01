@@ -97,21 +97,25 @@ class ErrorMonitoringService {
 
     // Send to custom error tracking endpoint if configured
     if (import.meta.env.VITE_ERROR_TRACKING_ENDPOINT) {
-      fetch(import.meta.env.VITE_ERROR_TRACKING_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          error: {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
+      // Use HTTP client for better error handling and retry logic
+      import('./httpClient').then(({ httpClient }) => {
+        httpClient.post(
+          import.meta.env.VITE_ERROR_TRACKING_ENDPOINT!,
+          {
+            error: {
+              name: error.name,
+              message: error.message,
+              stack: error.stack
+            },
+            context
           },
-          context
+          {
+            timeout: 5000, // 5 second timeout for error tracking
+            retries: 1, // Only retry once for error tracking
+          }
+        ).catch(err => {
+          console.warn('Failed to send error to tracking endpoint:', err)
         })
-      }).catch(err => {
-        console.warn('Failed to send error to tracking endpoint:', err)
       })
     }
   }

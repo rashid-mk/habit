@@ -1,4 +1,4 @@
-# Deployment Guide - Firebase Spark (Free) Plan
+`# Deployment Guide - Firebase Spark (Free) Plan
 
 This guide covers deploying the Habit Experiment Tracker on Firebase's free Spark plan without Cloud Functions.
 
