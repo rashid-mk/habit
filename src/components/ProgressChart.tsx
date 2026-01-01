@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, memo } from 'react'
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Brush, ReferenceArea } from 'recharts'
 import { chartColors, chartConfig } from '../config/chartTheme'
 import { AccessibleDataTable } from './AccessibleDataTable'
@@ -20,7 +20,7 @@ interface ProgressChartProps {
   showDataTable?: boolean
 }
 
-export function ProgressChart({ 
+export const ProgressChart = memo(function ProgressChart({ 
   data, 
   habitType, 
   targetValue, 
@@ -430,4 +430,4 @@ export function ProgressChart({
       )}
     </div>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Habit, useCheckIn, useUndoCheckIn, useHabitChecks, useDeleteHabit, useUpdateProgress } from '../hooks/useHabits'
 import dayjs from 'dayjs'
@@ -13,7 +13,7 @@ interface HabitCardProps {
   selectedDate?: string
 }
 
-export function HabitCard({ habit, onClick, selectedDate }: HabitCardProps) {
+export const HabitCard = memo(function HabitCard({ habit, onClick, selectedDate }: HabitCardProps) {
   const navigate = useNavigate()
   const checkInMutation = useCheckIn()
   const undoCheckInMutation = useUndoCheckIn()
@@ -455,4 +455,4 @@ export function HabitCard({ habit, onClick, selectedDate }: HabitCardProps) {
       />
     </>
   )
-}
+})

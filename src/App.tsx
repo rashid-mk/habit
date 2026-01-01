@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthGuard } from './components/AuthGuard'
@@ -15,6 +15,7 @@ import { CelebrationProvider, useCelebration } from './contexts/CelebrationConte
 import { DateRestrictionProvider } from './contexts/DateRestrictionContext'
 import { DashboardProvider } from './contexts/DashboardContext'
 import { ConfettiCelebration } from './components/ConfettiCelebration'
+import { initScrollOptimization } from './utils/scrollOptimization'
 
 // Lazy load route components for code splitting
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -79,6 +80,12 @@ function GlobalCelebration() {
 }
 
 function App() {
+  // Initialize scroll optimization on app start
+  useEffect(() => {
+    const cleanup = initScrollOptimization()
+    return cleanup
+  }, [])
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
